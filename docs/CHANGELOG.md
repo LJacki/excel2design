@@ -4,6 +4,24 @@
 
 ---
 
+## v0.3.2 (2026-06-02) — DeepSeek V4 Pro 审查修复
+
+### 修复（基于 docs/REVIEW_v2.md 评价）
+- **P0-1**：`PortWidth.to_verilog()` 处理 `msb=None` 边界（width 列空时正确生成无位宽端口，而不是 `[None:0]` 非法 Verilog）
+- **P1-5**：`wrapper` 子命令自动创建输出目录（之前会 `FileNotFoundError → exit 1`）
+
+### 测试
+- 216 → **221 全过**（+3 unit + 2 e2e）
+- 验证：width 列空 → 合法 1-bit 端口 ✓；输出目录深 3 层自动创建 ✓
+
+### Commit
+- `cda08d6` "fix: DeepSeek V4 Pro review findings — P0-1 (width=None bug) + P1-5 (wrapper output dir)"
+
+### Tag
+- `v0.3.2`
+
+---
+
 ## v0.3.1 (2026-06-02) — v0.3 验收 P1 修复
 
 ### 修复（基于 docs/REVIEW.md 评价）
