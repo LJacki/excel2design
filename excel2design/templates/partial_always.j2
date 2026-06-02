@@ -1,0 +1,19 @@
+{# Always-blocks for reset (per SPEC §5.5)
+   Grouped by (clock, reset_type) tuples, then by reset type.
+   The orchestrator (generators/verilog.py) computes these groups and passes
+   them in as `always_groups` — each group becomes one always block.
+   ============================================================== #}
+{%- for group in always_groups %}
+
+    // ---------- {{ group.label }} ----------
+    // Generated for: {{ group.regs | map(attribute='name') | join(', ') }}
+    always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
+        if (!rst_n) begin
+{%- for reg in group.regs %}
+            {{ reg.name }} <= {{ reg.default }};
+{%- endfor %}
+        end else begin
+            // TODO: drive these regs
+        end
+    end
+{%- endfor %}

@@ -1,0 +1,90 @@
+{# Verilog wrapper template per SPEC §5.
+   Byte-stable: no random, no timestamp, no env vars.
+   Jinja2 env: trim_blocks=False, lstrip_blocks=True, keep_trailing_newline=True.
+   LF only, no trailing whitespace. Port order: in/out/inout — each in Excel order. #}
+// =====================================================
+// Module:    {{ module.name }}
+// Source:    {{ source_file }}{{ " / sheet: " + source_sheet if source_sheet else "" }}
+// =====================================================
+// Company Confidential
+// =====================================================
+{%- if module.parameters %}
+
+module {{ module.name }} #(
+{%- for p in module_parameters %}
+    {{ p.param_type.value }}{% if p.width %} [{{ p.width|int - 1 }}:0]{% endif %} {{ p.name }} = {{ p.value }}{{ "," if not loop.last else "" }}
+{%- endfor %}
+) (
+{%- else %}
+
+module {{ module.name }} (
+{%- endif %}
+    // ---------- INPUTS ----------
+{%- for port in input_ports %}
+    input  {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last or output_ports or inout_ports else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- endfor %}
+{%- if output_ports %}
+    // ---------- OUTPUTS ----------
+{%- for port in output_ports %}
+    output {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last or inout_ports else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- endfor %}
+{%- endif %}
+{%- if inout_ports %}
+    // ---------- INOUTS ----------
+{%- for port in inout_ports %}
+    inout  {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- endfor %}
+{%- endif %}
+);
+
+{%- for port in internal_wires %}
+    wire {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }};
+{%- endfor %}
+{%- if not internal_wires %}
+    // (none — all wires are input ports)
+{%- endif %}
+
+    // ---------- INTERNAL REGS ----------
+    // (output ports are already declared as regs in the port list)
+{%- for port in internal_regs %}
+    // {{ port.name }}: default = {{ port.default }} (declared in port list)
+{%- endfor %}
+{%- if regs_with_default %}
+
+    // ---------- INITIAL ----------
+    initial begin
+{%- for port in regs_with_default %}
+        {{ port.name }} = {{ port.default }};
+{%- endfor %}
+    end
+{%- endif %}
+{%- if always_groups %}
+{%- for group in always_groups %}
+
+    // ---------- {{ group.label }} ----------
+    // Generated for: {{ group.regs | map(attribute='name') | join(', ') }}
+    always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
+        if (!rst_n) begin
+{%- for reg in group.regs %}
+            {{ reg.name }} <= {{ reg.default }};
+{%- endfor %}
+        end else begin
+            // TODO: drive these regs
+        end
+    end
+{%- endfor %}
+{%- endif %}
+
+    // =================================================
+    // TODO: Implement {{ module.name }} logic
+    //
+    // Parameters: {{ param_names or '(none)' }}
+    // Primary clock: {{ module.primary_clock() or '(none)' }}
+    //
+    // Registers and reset behavior:
+{%- for port in module.regs() %}
+    //   {{ port.name }} : {{ port.reset_type.value }} reset{% if port.default %} to {{ port.default }}{% endif %}{% if port.signed %}  (signed){% endif %}
+{%- endfor %}
+    // =================================================
+
+endmodule
