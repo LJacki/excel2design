@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.2
+> 版本: v0.3
 > 最后更新: 2026-06-01
-> 状态: Jack 已确认核心设计，进入实现阶段
+> 状态: 已通过第三方设计审查（M1-M5 补丁就位），即将开 Phase 0
 
 ---
 
@@ -200,12 +200,199 @@ class Module:
     def primary_clock(self) -> Optional[str]: ...# 出现次数最多的 clock 名
 ```
 
-### 3.4 异常
-- `ExcelParseError` — Excel 格式/列缺失/marker 缺失
-- `PortValidationError` — 端口名非法/方向非法/位宽非法
-- `DuplicatePortError` — 同名端口
-- `ModuleNotFoundError` — sheet 不存在
-- `MarkerMissingError` — `# === PARAMETERS ===` / `# === PORTS ===` 缺失
+### 3.4 异常（三层分类）
+
+```
+ExcelParseError       # 物理层：cell 类型、列缺失、marker 缺失、合并单元格
+SemanticError         # 逻辑层：端口重名、identifier 非法、width 表达式含未声明 param
+RenderError           # 生成层：模板渲染失败、坐标越界
+```
+
+所有异常的基类：
+
+```python
+@dataclass
+class ExcelParseError(Exception):
+    message: str
+    sheet: Optional[str] = None     # 源 sheet 名
+    row: Optional[int] = None       # 1-based；None = 整文件级错误
+    col: Optional[int] = None       # 1-based (A=1)；None = 整行级错误
+    suggestion: Optional[str] = None  # 修复建议
+```
+
+**子类型清单**：
+- `MarkerMissingError(sheet, marker_name)` — `# === PARAMETERS ===` / `# === PORTS ===` 缺失
+- `HeaderMismatchError(sheet, row, expected, got)` — 表头列名不匹配
+- `MergedCellError(sheet, range)` — 检测到合并单元格
+- `FormulaCellError(sheet, row, col)` — 检测到 Excel 公式
+- `PortValidationError(sheet, row, col, message)` — 端口名非法/方向非法/位宽非法
+- `DuplicatePortError(sheet, name, rows)` — 同名端口（列出所有重复行号）
+- `ModuleNotFoundError(name)` — sheet 不存在
+- `IdentifierError(sheet, row, col, name)` — 非合法 Verilog identifier 或为保留字
+- `UnknownParameterError(sheet, port_row, param_name)` — width 表达式引用未声明的 parameter
+- `UnsupportedCellTypeError(sheet, row, col, type_name)` — 单元格类型不在白名单
+
+**CLI 渲染格式**：
+```
+ERROR [sheet: uart_rx, row 8, col 3] 位宽 "8 bits" 既不是数字也不是表达式
+       ↳ 建议：width 列应填纯数字（如 8）或 parameter 名（如 DATA_WIDTH）
+```
+
+### 3.5 实现细节（强制规范）
+
+#### 3.5.1 单元格类型容错 `cell_to_str`
+
+```python
+def cell_to_str(cell) -> str:
+    """统一转字符串；None 和空字符串一致处理"""
+    v = cell.value
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "1" if v else "0"
+    if isinstance(v, (int, float)):
+        return str(int(v)) if isinstance(v, int) else str(v)
+    if isinstance(v, str):
+        return v.strip()
+    raise UnsupportedCellTypeError(
+        sheet=cell.parent.title, row=cell.row, col=cell.column,
+        type_name=type(v).__name__
+    )
+```
+
+**白名单**：`str / int / float / bool / None`，其他类型（datetime、formula）必须报错。
+
+**陷阱**：
+- openpyxl `data_only=False` 时公式返回 `"=A1+1"` 字符串，要先检测 `cell.data_type == 'f'`
+- 数字 0/1 会被 Excel 自动转 bool，需特别处理
+- 日期单元格 `datetime.datetime` 必须报错
+
+#### 3.5.2 Verilog Identifier 校验
+
+```python
+import re
+from keyword import kwlist  # Python 关键字白名单参考
+
+VERILOG_KEYWORDS = {
+    "always", "and", "assign", "automatic", "begin", "buf", "bufif0", "bufif1",
+    "case", "casex", "casez", "cell", "cmos", "config", "deassign", "default",
+    "defparam", "design", "disable", "edge", "else", "end", "endcase",
+    "endconfig", "endfunction", "endgenerate", "endmodule", "endprimitive",
+    "endspecify", "endtable", "endtask", "event", "for", "force", "forever",
+    "fork", "function", "generate", "genvar", "highz0", "highz1", "if",
+    "ifnone", "include", "initial", "inout", "input", "integer", "join",
+    "large", "liblist", "library", "localparam", "macromodule", "medium",
+    "module", "nand", "negedge", "nmos", "nor", "not", "notif0", "notif1",
+    "or", "output", "parameter", "pmos", "posedge", "primitive", "pull0",
+    "pull1", "pulldown", "pullup", "rcmos", "real", "realtime", "reg",
+    "release", "repeat", "rnmos", "rpmos", "rtran", "rtranif0", "rtranif1",
+    "scalared", "small", "specify", "specparam", "strong0", "strong1",
+    "supply0", "supply1", "table", "task", "time", "tran", "tranif0",
+    "tranif1", "tri", "tri0", "tri1", "triand", "trior", "trireg", "unsigned",
+    "use", "vectored", "wait", "wand", "weak0", "weak1", "while", "wire",
+    "wor", "xnor", "xor",
+}
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+def check_identifier(name: str, kind: str, sheet: str, row: int, col: int) -> None:
+    if not _IDENT_RE.match(name):
+        raise IdentifierError(
+            sheet, row, col, name,
+            suggestion=f"{kind} 必须是字母/数字/下划线，且以字母或下划线开头"
+        )
+    if name in VERILOG_KEYWORDS:
+        raise IdentifierError(
+            sheet, row, col, name,
+            suggestion=f"{kind} 不能是 Verilog 保留字"
+        )
+```
+
+**应用范围**：module 名（从 sheet 名校验）、parameter 名、port 名。
+
+#### 3.5.3 位宽解析 `parse_width`
+
+```python
+_PARAM_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_EXPR_TOKEN_RE = re.compile(r"[A-Za-z_0-9+\-*/()\s]+")
+
+@dataclass
+class PortWidth:
+    raw: str                       # 原始字符串
+    msb: Optional[int]             # 固定宽度时计算（如 8→7）；参数化时为 None
+    is_parameter: bool             # 是否引用 parameter
+
+def parse_width(raw: str, known_params: set[str], sheet: str, row: int, col: int) -> PortWidth:
+    s = str(raw).strip() if raw is not None else ""
+    if not s:
+        return PortWidth(raw="1", msb=None, is_parameter=False)  # 默认 1 位
+
+    # 纯数字
+    if s.isdigit():
+        n = int(s)
+        if n <= 0:
+            raise PortValidationError(sheet, row, col, f"位宽必须 > 0，得到 {n}")
+        return PortWidth(raw=s, msb=n-1, is_parameter=False)
+
+    # 单个 parameter 名
+    if _PARAM_RE.fullmatch(s) and s in known_params:
+        return PortWidth(raw=s, msb=None, is_parameter=True)
+
+    # 表达式（必须所有 token 都在 known_params 或为操作符/数字）
+    if _EXPR_TOKEN_RE.fullmatch(s):
+        tokens = set(_PARAM_RE.findall(s))
+        unknown = tokens - known_params - set(s for s in tokens if s.isdigit())
+        if not unknown:
+            return PortWidth(raw=s, msb=None, is_parameter=True)
+        raise UnknownParameterError(sheet, row, col, sorted(unknown)[0])
+
+    raise PortValidationError(
+        sheet, row, col, f"位宽 '{s}' 既不是纯数字也不引用已知 parameter"
+    )
+```
+
+**关键规则**：
+- 固定宽度：wrapper 写 `[7:0]`，HTML 写 `[7:0]`
+- 参数化宽度：wrapper 写 `[DATA_WIDTH-1:0]`（原样保留），HTML 同样保留
+- `width=1`：`msb=0` 但显示时省略位宽
+
+#### 3.5.4 端口排序稳定性
+
+**铁律**：
+1. 解析后 `ports` list 严格按 Excel 行的物理顺序（`ws.iter_rows` 顺序 = 行号顺序）
+2. 端口按 direction 分组后，**组内顺序仍按 Excel 顺序**，不重排
+3. 多次生成同一 Excel，输出字节完全一致（除非有显式变化）
+
+**测试方法**：`test_no_diff_on_repeat` — 同一模块生成两次 wrapper，diff 为空。
+
+#### 3.5.5 Default 值字面量规则
+
+| 用户输入 | 解析后 | wrapper 输出 |
+|---|---|---|
+| 空 | 无 | 不生成对应 reg 的复位赋值 |
+| `0` | `1'b0` | `1'b0` |
+| `1` | `1'b1` | `1'b1` |
+| `8'hFF` | 原样 | `8'hFF` |
+| `{DATA_WIDTH{1'b0}}` | 原样 | `{DATA_WIDTH{1'b0}}` |
+| `my_func(x)` | 原样 | `my_func(x)` |
+
+**校验规则**：
+- 纯数字 0/1 → 自动加 `1'b` 前缀
+- 含 `'` → 视为 Verilog 字面量，原样保留
+- 含 `{` → 视为 replication，原样保留
+- 含 `( )` 但无 `'` → 视为函数调用，原样保留
+- 含中文/特殊字符 → 报错
+
+#### 3.5.6 多时钟域 always 分组键
+
+**分块键**：`{clock, reset_type}` 二元组（注意是 `clock` 不是 `reset`！reset 名字假定是 `rst_n`，详见 §5.7）
+
+**示例**：
+- 4 个 reg，`clock` 全是 `clk`，`reset_type` 全是 `async` → 1 个 always 块
+- 2 个 reg 用 `clk` async + 1 个 reg 用 `clk2` async → **2 个 always 块**（按 clock 分）
+- 1 个 reg 用 `clk` sync + 1 个 reg 用 `clk` async → **2 个 always 块**（按 reset_type 分）
+
+**混合 reset name 处理**：v0.3 假定复位信号统一叫 `rst_n`（见 §5.7）。如果工程师用了 `rst` / `rst_a_n` / `arst_n` 等不同名，v0.3 接受（不报错），但 always 块内统一用 `rst_n`。v0.4 之前不做"按 reset name 二次分组"。
 
 ---
 
@@ -375,17 +562,17 @@ endmodule
 
 **触发条件**：模块中存在带 `default` 的 reg。
 
-**分块规则**（按 reset_type 分）：
-- 所有 `async` 的 reg → 一个 `always @(posedge clk or negedge rst_n)` 块
-- 所有 `sync` 的 reg → 一个 `always @(posedge clk)` 块
-- 所有 `none` 的 reg → **不生成 always 块**，但 TODO 注释里列出
-- 混合 reset_type → 多个 always 块（按类型分组）
+**分块键**：`(clock, reset_type)` 二元组（详见 §3.5.6）
+
+- 同一 `(clock, reset_type)` 组合的所有 reg → 合并到一个 always 块
+- 不同组合 → 多个 always 块
+- `reset_type=none` 的 reg → **不生成** always 块（但仍生成 initial 块，若有 default）
 
 **块内结构**（async 为例）：
 ```verilog
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        <每个 reg 用其 default 值复位>
+always @(posedge <clock> or negedge <reset>) begin
+    if (!<reset>) begin
+        <该块内每个 reg 用其 default 值复位>
     end else begin
         // TODO: drive these regs
     end
@@ -394,20 +581,62 @@ end
 
 **块内结构**（sync 为例）：
 ```verilog
-always @(posedge clk) begin
-    if (!rst_n) begin
-        <每个 reg 用其 default 值复位>
+always @(posedge <clock>) begin
+    if (!<reset>) begin
+        <该块内每个 reg 用其 default 值复位>
     end else begin
         // TODO: drive these regs
     end
 end
 ```
 
+**`<reset>` 名字**：v0.3 假定统一叫 `rst_n`（用户可在 TODO 注释中改）。always 块内引用 `rst_n`，不复用 Excel 中的 reset signal name（避免不一致）。详见 §5.7。
+
+**示例**：4 个 reg 都用 `clk` async → 1 个 always 块；如果再加 1 个用 `clk2` sync 的 reg → 2 个 always 块。
+
 ### 5.6 TODO 注释规则
 - 列出所有 reg 及其 reset 行为
 - 列出模块的主时钟和复位信号
 - 列出该模块涉及的所有 parameter 名
 - 注明哪些 reg 暂未生成 always（`reset_type=none` 的）
+
+### 5.7 字节稳定铁律（Byte-Stable Output）
+
+**所有 wrapper / 框图生成必须满足以下铁律**，否则 golden test 失效：
+
+1. **时间戳可控**：文件头 `// Generated:` 默认不写时间戳（`--no-timestamp` 为默认值）。开启时间戳时支持 `SOURCE_DATE_EPOCH` 环境变量。
+2. **行尾固定 `'\n'`**（LF），无 `'\r\n'`，无 trailing whitespace。
+3. **端口列表严格按 Excel 顺序**：inputs 之间、outputs 之间、inouts 之间不重排。
+4. **parameter 列表严格按 parameter 段 Excel 顺序**。
+5. **always 块内 reg 顺序**按首次出现在 Excel 中的顺序（去重后）。
+6. **always 块之间顺序**按 `(clock, reset_type)` 字典序（先按 clock 名 ASCII 升序，再按 reset_type 字母序：`async` < `none` < `sync`）。
+7. **Jinja2 模板禁用 `random` / 时间戳 / 任何非确定性来源**。
+8. **不依赖当前 locale / 时区 / 环境变量**（除 `SOURCE_DATE_EPOCH`）。
+9. **端口对齐固定宽度**：所有端口声明按 `direction(6) + space + type(8) + space + 端口声明` 格式对齐（`input  wire` / `output reg ` / `inout  wire`，每行右对齐到 `width` 字段）。
+10. **同一 Excel 多次生成 → 字节完全一致**（除时间戳外）。
+
+**测试方法**：
+```python
+def test_no_diff_on_repeat(sample_module):
+    a = generate_wrapper(sample_module)
+    b = generate_wrapper(sample_module)
+    assert a == b
+
+def test_no_diff_on_format_change(sample_module):
+    """修改无关字段（如 comment）后重生成，diff 应只包含受影响的行"""
+    ...
+```
+
+### 5.8 Reset 信号约定
+
+**v0.3 约定**：
+- wrapper 中 always 块的复位判断统一引用 `rst_n`（不复用 Excel 的 reset signal name）
+- TODO 注释里**同时**列出"假设的复位信号名"（默认 `rst_n`）和"实际引用的 input 端口名"（如果用户 Excel 里有 `rst` / `arst_n` 等）
+- 工程师在 Excel 里**可以**有任意 reset input 端口名（`rst_n` / `rst` / `arst_n` / `sys_rst_n` 都可以），但生成的 always 块**永远**用 `rst_n`
+
+**理由**：v0.3 不做 reset name 二次分组，简化 always 块生成；用户只需要把 Excel 里那个真正的 reset port 名字改成 `rst_n` 即可（或在生成的 wrapper 里全文替换）。
+
+**v0.4 计划**：识别 Excel 中"标 reset 用途的 input 端口"（可能需要新列 `reset_signal: bool`），按真实名字生成。
 
 ---
 
@@ -457,19 +686,24 @@ generate_wrapper(module, output=Path("out/uart_rx.v"))
 
 ---
 
-## 8. 阶段路线图
+## 8. 阶段路线图（v0.3 修订）
 
-| Phase | 目标 | 验收标准 | 估时 |
-|---|---|---|---|
-| 0 | 项目骨架 + Excel 样例 + 依赖 | `pip install -e .` 成功；`examples/sample_module.xlsx` 可被 openpyxl 读 | 0.5d |
-| 1 | 数据模型 + Excel 解析器 | `parse_excel()` 正确解析样例；7 种边界情况有单元测试（缺列、空行、注释、参数表达式宽度、重复端口名、非法方向、inout 端口） | 1d |
-| 2 | HTML 框图生成器 | 视觉符合 §4.2；3 种端口（input/output/inout）渲染正确；位宽表达式保留原样 | 0.5d |
-| 3 | SVG 框图生成器 | 视觉符合 §4.3；在浏览器/Inkscape 打开正常；端口数自适应 | 0.5d |
-| 4 | Excalidraw 框图生成器 | 在 app.excalidraw.com 打开正常；端口可读 | 0.5d |
-| 5 | Verilog wrapper 生成器 | 输出符合 §5；用 iverilog/verilator 语法 check 通过；TODO 注释完整 | 1d |
-| 6 | CLI + 集成测试 + README | `excel2design all examples/sample_module.xlsx uart_rx` 一键跑通；README 有安装/使用/样例截图 | 1d |
+| Phase | 目标 | 估时 | 风险 | 验收标准 |
+|---|---|---|---|---|
+| 0 | 项目骨架 + Excel 样例 + pyproject.toml | 0.5d | 低 | `pip install -e .` 成功；`tools/gen_sample.py` 能生成 `examples/sample_module.xlsx` |
+| 1 | 数据模型 + Excel 解析器 | 2.5d | **高** | `parse_excel()` 正确解析样例；§3.5 实现细节全部落地；10+ 边界单测通过（含空行/合并单元格/公式/中文/参数化宽度/多时钟） |
+| **1.5** | **Golden baseline 框架 + 4 个 fixture** | **0.5d** | **中** | `tests/fixtures/{uart_rx, axi_crossbar, multi_clock, empty_ports}.xlsx` 配 `expected/` 目录；pytest 跑通 baseline diff |
+| 2 | HTML 框图生成器 | 0.5d | 低 | 视觉符合 §4.2；§3.5.4 端口排序铁律验证；3 种端口（in/out/inout）渲染正确 |
+| 3 | SVG 框图生成器 | 1d | 中 | 视觉符合 §4.3；`xml.etree` 解析无错；端口数自适应布局（伪代码见 §4.3）；浏览器 + Inkscape 打开正常 |
+| 4 | Excalidraw 框图生成器 | 1.5d | **高** | app.excalidraw.com 打开正常；固定 seed 后手绘风格稳定（snapshot test）；元素坐标全为整数 |
+| 5a | Wrapper 基础（端口 + parameter） | 0.5d | 中 | 输出符合 §5.3/5.4；端口对齐格式固定（§5.7.9）；`test_no_diff_on_repeat` 通过 |
+| 5b | Wrapper 复位 always + TODO 注释 | 1.5d | **高** | 多 (clock, reset_type) 分组正确（§3.5.6 / §5.5）；`test_mixed_reset` 等通过；iverilog `-t null` 语法 check 通过 |
+| 6 | CLI + 集成测试 + README 截图 | 1.5d | 中 | `excel2design all` 一键跑通；端到端测试（CLI + iverilog smoke）；README 补三张截图 |
+| **总** | | **10.5d** | | |
 
-**总估时**：~5 个工作日
+**风险最高的 3 个 Phase**：1（解析器是输入闸）、4（Excalidraw schema 不熟）、5b（wrapper 是核心交付）。
+
+**顺序不变**，但建议在 Phase 1 完成后**先做 1.5 再做 2/3/4/5**。Golden baseline 早建，后续回归压力小。
 
 ---
 
@@ -478,10 +712,12 @@ generate_wrapper(module, output=Path("out/uart_rx.v"))
 | 决策 | 选择 | 替代方案 | 理由 |
 |---|---|---|---|
 | Excel 库 | openpyxl | pandas | openpyxl 读写 .xlsx 性能更好，pandas 过度 |
-| 模板引擎 | Jinja2 | 字符串拼接 | wrapper 和 HTML 框图都需要模板，可维护性高 |
+| **Wrapper 模板** | **Jinja2** | **字符串拼接** | **wrapper 和 HTML 框图都需要模板；Jinja2 env 配 `trim_blocks=True, lstrip_blocks=True` 防空行** |
+| **SVG / Excalidraw 模板** | **ElementTree / dataclasses.asdict** | **Jinja2** | **结构化数据用代码构造更稳；Jinja2 拼字符串易错** |
 | CLI 框架 | click | argparse | 装饰器风格、子命令更优雅、自动生成 --help |
-| Excalidraw | 手写 JSON 生成 | 调用 Excalidraw API | Excalidraw 没有官方的 headless 库；JSON 格式稳定 |
+| Excalidraw | 手写 JSON 生成 | 调用 Excalidraw API | Excalidraw 没有官方的 headless 库；JSON 格式稳定；固定 seed 保稳定 |
 | 测试 | pytest | unittest | 社区标准、fixture 强大 |
+| Golden test | 手写 baseline + 字节稳定铁律 | snapshot | 手写更可控；字节稳定铁律是前置条件 |
 | 打包 | pyproject.toml | setup.py | 现代标准，PEP 517/518 |
 
 ---
@@ -514,7 +750,153 @@ generate_wrapper(module, output=Path("out/uart_rx.v"))
 
 ---
 
+## 12. v0.2 → v0.3 变更日志（M1-M5 审查补丁）
+
+| ID | 补丁 | 位置 | 关键变更 |
+|---|---|---|---|
+| **M1** | 多时钟域 always 分组 | §3.5.6, §5.5 | 分块键从 `(reset_type)` 升级到 `(clock, reset_type)` 二元组；同一模块多 clock → 多 always 块 |
+| **M2** | 异常三层分类 + 行列号定位 | §3.4 | 新增 `ExcelParseError` 基类带 `row/col/sheet/suggestion` 字段；CLI 渲染 `[sheet: xxx, row N, col M]` 格式 |
+| **M2** | 单元格类型容错 | §3.5.1 | `cell_to_str()` 强制函数；白名单 `str/int/float/bool/None`；datetime / formula 必报错 |
+| **M3** | 字节稳定铁律 | §5.7 | 10 条铁律（时间戳可控 / LF 行尾 / 端口顺序 / Jinja2 无随机源 / 端口对齐宽度 / 多次生成 diff 空等） |
+| **M3** | 复位信号约定 | §5.8 | always 块内统一引用 `rst_n`；TODO 注释里列实际 reset port 名 |
+| **M4** | Verilog identifier 校验 | §3.5.2 | 关键字黑名单（VERILOG_KEYWORDS）+ 正则 `^[A-Za-z_][A-Za-z0-9_]*$`；module/param/port 都校验 |
+| **M4** | default 值字面量规则 | §3.5.5 | 纯数字 0/1 自动加 `1'b` 前缀；replication/字面量/函数调用原样保留 |
+| **M5** | `reset_type=none` 行为 | §5.5 | 不生成 always 块（保留），但仍生成 initial 块（如有 default） |
+| **架构** | 增加 §3.5 实现细节章节 | §3.5 | 6 个子节（cell_to_str / identifier / width / 排序 / default / 时钟分组） |
+| **架构** | 增加 §1.4 暂未识别风险 | §10 | 增 3 条预留（多模块共享 param / interface modport / generate 实例化） |
+| **路线图** | 拆 Phase 5 + 加 Phase 1.5 | §8 | 总估时 5d → 10.5d；新增 Golden baseline 阶段 |
+| **路线图** | 增加测试策略章节 | §13 | 4 层测试（unit / generator / e2e / golden fixture） |
+
+**Top-5 投入回报**（已落地）：
+- M1 多时钟分块 — 0.5d 投入，规避"真实项目一上来就崩"风险
+- M2 cell_to_str + 行列号 — 0.5d 投入，规避 90% 解析 bug
+- M3 字节稳定铁律 — 0.5d 投入，确保所有 golden test 可行
+- M4 identifier 校验 — 0.2d 投入，规避生成语法错的 .v
+- M5 reset_type=none 行为 — 0.1d 投入，规避初始值缺失 bug
+
+**subagent 审查但暂未采纳的建议**（v0.4 之后再议）：
+- ❌ entry point 插件化（过早抽象）
+- ❌ `Project.shared_parameters` v0 预留 dataclass 字段（YAGNI）
+- ✅ 接受：SVG/Excalidraw 别用 Jinja2（v0.3 在 §9 ADR 里更新）
+- ✅ 接受：Jinja2 `trim_blocks=True, lstrip_blocks=True`（§9 ADR）
+- ✅ 接受：Phase 5 拆 5a/5b（已落地）
+- ✅ 接受：4 个 fixture（Phase 1.5 已加入）
+
+---
+
+## 13. 测试策略（v0.3 新增）
+
+### 13.1 四层测试金字塔
+
+```
+        /\
+       /  \         E2E（CLI 集成 + iverilog smoke）
+      /────\        
+     /      \       Golden fixture（uart_rx / axi_crossbar / multi_clock / empty_ports）
+    /────────\      
+   /          \     生成器单测（HTML/SVG/Excalidraw/Verilog 各 1 文件）
+  /────────────\    
+ /              \   解析器单测（marker / param / port / type / width / identifier）
+/________________\  
+```
+
+### 13.2 单元测试（pytest）
+
+| 文件 | 测什么 | 关键 case |
+|---|---|---|
+| `test_models.py` | Port/Parameter/Module dataclass | `inputs()/outputs()/regs()` 分类；`primary_clock()` 多时钟返回第一个/报歧义 |
+| `test_parser_markers.py` | 两段 marker 解析 | marker 缺失 / 拼写错误 / 两段间空行 0/5/100 |
+| `test_parser_params.py` | parameter 段 | 5 列缺一 / value 含表达式 / param_type 大小写 / width 数字 vs 表达式 |
+| `test_parser_ports.py` | port 段 | 缺列 / 空行 / 注释 / 参数化宽度 / 重复端口名 / 非法方向 / inout / signed |
+| `test_parser_types.py` | 单元格类型 | 数字 / 字符串 / bool / None / **公式** / **日期** / **合并单元格** |
+| `test_width_resolver.py` | 位宽解析 | 固定宽度 / 参数化 / 嵌套表达式 / width=0 / width=-1 / 未声明 param |
+| `test_identifier.py` | identifier 校验 | 关键字 / 空字符串 / Unicode / 中文 / 含 `[]` 端口名 |
+
+### 13.3 生成器单测
+
+| 文件 | 必测 case |
+|---|---|
+| `test_html.py` | 含关键 token / inout 放底部 / 位宽表达式保留 / 端口顺序稳定 |
+| `test_svg.py` | `xml.etree` parse 通过 / 画布尺寸正确 / 端口数自适应 |
+| `test_excalidraw.py` | `json.loads` 通过 / 固定 seed / 必填字段齐全 / 坐标全为整数 |
+| `test_verilog.py` | 见 §13.4 |
+
+### 13.4 Wrapper 测试（最关键）
+
+```python
+def test_wrapper_basic(sample_module):
+    out = generate_wrapper(sample_module)
+    assert "module uart_rx" in out
+    assert "endmodule" in out
+
+def test_wrapper_port_order(sample_module):
+    out = generate_wrapper(sample_module)
+    # inputs 严格按 Excel 顺序
+    assert out.index("clk") < out.index("rst_n") < out.index("rx_pad")
+
+def test_wrapper_async_grouped(async_module):
+    out = generate_wrapper(async_module)
+    assert "always @(posedge clk or negedge rst_n) begin" in out
+    assert "if (!rst_n) begin" in out
+
+def test_wrapper_mixed_reset(mixed_module):
+    """sync + async + 不同 clock 共存 → 多个 always 块，按 (clock, reset_type) 字典序"""
+    out = generate_wrapper(mixed_module)
+    assert out.count("always @(") == 3
+    # 字典序：async → none → sync（按 reset_type），同 reset_type 内按 clock 名
+
+def test_wrapper_multi_clock(multi_clock_module):
+    """2 个 clock (clk / clk2) 各有 async reg → 2 个 always 块"""
+    out = generate_wrapper(multi_clock_module)
+    assert out.count("always @(") == 2
+    assert "posedge clk " in out
+    assert "posedge clk2" in out
+
+def test_no_diff_on_repeat(sample_module):
+    """字节稳定铁律核心验证：相同输入生成两次必须完全一致"""
+    a = generate_wrapper(sample_module)
+    b = generate_wrapper(sample_module)
+    assert a == b
+
+def test_reset_type_none_with_default(none_module):
+    """reset_type=none 但有 default → 仍生成 initial 块，不生成 always 块"""
+    out = generate_wrapper(none_module)
+    assert "initial" in out
+    assert "always @(" not in out
+```
+
+### 13.5 端到端测试
+
+`tests/e2e/`：调用 CLI 二进制（`subprocess.run`），断言：
+1. exit code = 0
+2. 输出文件全部存在
+3. 生成的 .v 能跑 `iverilog -t null`（语法 check，**不算**测试，只算 smoke）
+4. 生成的 .svg 能被 `xml.etree` parse
+5. 生成的 .excalidraw 能被 `json.loads`
+
+### 13.6 Golden Fixture（Phase 1.5）
+
+`tests/fixtures/`：
+- `uart_rx.xlsx` — 基本样例
+- `axi_crossbar.xlsx` — 大模块（30+ 端口、参数化宽度、inout）
+- `multi_clock.xlsx` — 故意多时钟
+- `empty_ports.xlsx` — 零端口
+
+每个 fixture 配 `expected/{format}/{module}.{ext}` 存 golden baseline。CI 跑 diff 校验。
+
+---
+
+## 14. 暂未识别风险（v0.3 暂缓 / 架构预留）
+
+- [ ] 多模块共享 parameter（v0.3 → v0.4 解决：加 `Project.shared_parameters`，Excel 顶部加 `@shared` 段）
+- [ ] SystemVerilog interface modport（v0.3 → v0.5 解决：补 `Port.interface_name: Optional[str]` 字段；v0.3 暂不加）
+- [ ] generate 实例化、参数化模块实例（v0.3 不做；v1.0 之前不考虑）
+- [ ] `Port.array_dim`（端口数组如 `output [3:0] data[7:0]`）— v0.3 不支持；v0.4 评估
+- [ ] 端口默认值与 parameter 重名（如 parameter `WIDTH` 和端口 `width`）— v0.3 视作不同 identifier，不处理
+- [ ] `interface=1` 端口在 Excel 中的真实处理逻辑（v0.3 仅记录，不做特殊处理）
+
+---
+
 **确认后我会**：
-1. 提交 SPEC v0.2 到 git
-2. 写 README.md
-3. 开始 Phase 0（项目骨架 + 样例 Excel）
+1. 提交 SPEC v0.3 到 git
+2. 开 Phase 0（项目骨架 + pyproject.toml + 样例 Excel 生成脚本）
