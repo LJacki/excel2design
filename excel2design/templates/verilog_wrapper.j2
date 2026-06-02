@@ -81,6 +81,10 @@ module {{ module.name }} (
     // Parameters: {{ param_names or '(none)' }}
     // Primary clock: {{ module.primary_clock() or '(none)' }}
     //
+    // Reset signals per clock domain (wrapper uses `rst_n` in always blocks):
+{{ reset_map }}
+    //   → Replace `rst_n` with the actual reset port name for each domain.
+    //
     // Registers and reset behavior:
 {%- for port in module.regs() %}
     //   {{ port.name }} : {{ port.reset_type.value }} reset{% if port.default %} to {{ port.default }}{% endif %}{% if port.signed %}  (signed){% endif %}

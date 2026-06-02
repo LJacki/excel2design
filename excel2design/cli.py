@@ -245,7 +245,22 @@ def _exit_code(exc: BaseException) -> int:
         return 3
     if isinstance(exc, ExcelParseError):
         return 4
+    # Corrupt or non-xlsx files (P1-4 fix): map openpyxl's errors to exit 4
+    # so the SPEC §6 contract holds for callers.
+    if _is_bad_zip_or_invalid_file(exc):
+        return 4
     return 1
+
+
+def _is_bad_zip_or_invalid_file(exc: BaseException) -> bool:
+    """Detect openpyxl's BadZipFile / InvalidFileException without importing them
+    (so we don't crash if openpyxl is missing for some reason)."""
+    name = type(exc).__name__
+    module = type(exc).__module__
+    return (
+        name in ("BadZipFile", "InvalidFileException")
+        or module.endswith("zipfile")
+    )
 
 
 if __name__ == "__main__":

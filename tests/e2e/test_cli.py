@@ -172,9 +172,24 @@ def test_missing_module_exits_3() -> None:
 
 
 def test_malformed_excel_exits_4(tmp_path: Path) -> None:
-    """A non-xlsx file should produce a parse error."""
+    """A non-xlsx file should produce a parse error (P1-4 fix: exit 4)."""
     bad = tmp_path / "bad.xlsx"
     bad.write_text("not a real xlsx", encoding="utf-8")
     r = _run_cli("all", str(bad), "uart_rx")
-    # openpyxl raises an exception; CLI should catch and exit 4 (or similar)
-    assert r.returncode != 0
+    assert r.returncode == 4, f"expected exit 4, got {r.returncode}"
+
+
+def test_empty_file_exits_4(tmp_path: Path) -> None:
+    """An empty .xlsx file is also a bad zip → exit 4."""
+    bad = tmp_path / "empty.xlsx"
+    bad.write_text("", encoding="utf-8")
+    r = _run_cli("all", str(bad), "uart_rx")
+    assert r.returncode == 4
+
+
+def test_truncated_xlsx_exits_4(tmp_path: Path) -> None:
+    """A truncated xlsx (just the magic bytes) should also exit 4."""
+    bad = tmp_path / "trunc.xlsx"
+    bad.write_bytes(b"PK\x03\x04")  # zip magic but nothing else
+    r = _run_cli("all", str(bad), "uart_rx")
+    assert r.returncode == 4

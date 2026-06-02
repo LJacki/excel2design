@@ -248,3 +248,36 @@ def test_todo_lists_all_regs() -> None:
         assert reg in v
     # reset behavior annotations
     assert "async reset" in v
+
+
+# ---- Reset signal hints (P1-3 fix) ----------------------------------------
+
+def test_todo_contains_reset_per_clock_hint() -> None:
+    """P1-3 fix: TODO must list per-clock-domain reset signal hints."""
+    m = load("multi_clock")
+    v = generate_wrapper(m)
+    # All 3 clock domains must appear
+    assert "clk_a →" in v
+    assert "clk_b →" in v
+    assert "clk_c →" in v
+    # A note that wrapper uses rst_n + how to fix
+    assert "wrapper uses `rst_n`" in v
+    assert "Replace `rst_n`" in v
+
+
+def test_todo_marks_fallback_source() -> None:
+    """When the wrapper cannot find a domain-local reset, mark it as fallback
+    so the user knows the match is uncertain."""
+    m = load("multi_clock")
+    v = generate_wrapper(m)
+    # multi_clock: rst_a_n/rst_b_n exist but aren't clock-tagged, so they match
+    # by name (good). clk_c has no matching reset port → fallback.
+    assert "fallback" in v or "NO reset port" in v
+
+
+def test_todo_reset_hint_for_single_clock_module() -> None:
+    """uart_rx: single clk domain, rst_n is the natural reset name."""
+    m = load("uart_rx")
+    v = generate_wrapper(m)
+    assert "clk →" in v
+    assert "rst_n" in v
