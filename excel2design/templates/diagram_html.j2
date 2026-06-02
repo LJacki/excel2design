@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ module.name }} — Block Diagram</title>
+<style>
+/* excel2design HTML block diagram — light theme (SPEC §4.2) */
+:root {
+  --bg: #FFFFFF;
+  --border: #DDDDDD;
+  --text: #333333;
+  --muted: #888888;
+  --wire-bg: #EEEEEE;
+  --reg-bg: #DCE7F5;
+  --logic-bg: #E8DDF2;
+  --inout-bg: #F5F0DC;
+  --clk-bg: #E0E0E0;
+  --signed-bg: #FCE6CC;
+  --heading-bg: #F7F7F7;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Menlo", "Consolas", "DejaVu Sans Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.diagram {
+  min-width: 480px;
+  max-width: 960px;
+  margin: 16px auto;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.diagram__title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--heading-bg);
+  letter-spacing: 0.5px;
+}
+.diagram__params {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+.diagram__params span { font-style: normal; color: var(--text); }
+.diagram__body {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+.col {
+  flex: 1 1 50%;
+  padding: 8px 12px;
+  min-width: 0;
+}
+.col--inputs { border-right: 1px solid var(--border); }
+.col__heading {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+.col--outputs .col__heading { text-align: right; }
+.col--inputs .col__heading { text-align: left; }
+.port {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0;
+  gap: 2px;
+}
+.col--outputs .port { align-items: flex-end; text-align: right; }
+.col--inputs .port { align-items: flex-start; text-align: left; }
+.port__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.port__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--wire-bg);
+  color: var(--text);
+}
+.badge--width {
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.badge--wire { background: var(--wire-bg); }
+.badge--reg  { background: var(--reg-bg); border-color: #B8CDE6; }
+.badge--logic { background: var(--logic-bg); border-color: #D2BFE2; }
+.badge--inout { background: var(--inout-bg); border-color: #D8C99B; }
+.badge--clk  { background: var(--clk-bg); color: #555555; }
+.badge--signed { background: var(--signed-bg); border-color: #E0B98A; }
+.badge--default { background: #F2F2F2; color: #555555; }
+.port__comment {
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.inout-strip {
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  background: var(--heading-bg);
+}
+.inout-strip__heading {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.inout-strip__row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+.inout-strip .port { margin: 0; }
+.empty-msg {
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  padding: 18px 12px;
+}
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="diagram__title">{{ module.name }}</div>
+{%- if module.parameters %}
+  <div class="diagram__params">
+    parameters:
+{%- for p in module.parameters %}
+    <span>{{ p.name }}={{ p.value }}</span>{% if not loop.last %}, {% endif %}
+{%- endfor %}
+  </div>
+{%- endif %}
+{%- if inputs or outputs or inouts %}
+  <div class="diagram__body">
+    <div class="col col--inputs">
+      <div class="col__heading">Inputs</div>
+{%- if inputs %}
+{%- for port in inputs %}
+<div class="port">
+  <div class="port__name">
+    <span class="port__name-text">{{ port.name }}</span>{% if port.width_str %}
+    <span class="badge badge--width">{{ port.width_str }}</span>{% endif %}
+    <span class="badge badge--{{ port.type_class }}">{{ port.type.value }}</span>{% if port.direction.value == "inout" %}
+    <span class="badge badge--inout">inout</span>{% endif %}{% if port.signed %}
+    <span class="badge badge--signed">signed</span>{% endif %}
+  </div>
+  <div class="port__meta">{% if port.default %}
+    <span class="badge badge--default">{{ port.default }}</span>{% endif %}{% if port.clock and port.type.value in ("reg", "logic") %}
+    <span class="badge badge--clk">clk: {{ port.clock }}</span>{% endif %}
+  </div>{% if port.comment %}
+  <div class="port__comment">{{ port.comment }}</div>{% endif %}
+</div>
+{%- endfor %}
+{%- else %}
+      <div class="empty-msg">—</div>
+{%- endif %}
+    </div>
+    <div class="col col--outputs">
+      <div class="col__heading">Outputs</div>
+{%- if outputs %}
+{%- for port in outputs %}
+<div class="port">
+  <div class="port__name">
+    <span class="port__name-text">{{ port.name }}</span>{% if port.width_str %}
+    <span class="badge badge--width">{{ port.width_str }}</span>{% endif %}
+    <span class="badge badge--{{ port.type_class }}">{{ port.type.value }}</span>{% if port.direction.value == "inout" %}
+    <span class="badge badge--inout">inout</span>{% endif %}{% if port.signed %}
+    <span class="badge badge--signed">signed</span>{% endif %}
+  </div>
+  <div class="port__meta">{% if port.default %}
+    <span class="badge badge--default">{{ port.default }}</span>{% endif %}{% if port.clock and port.type.value in ("reg", "logic") %}
+    <span class="badge badge--clk">clk: {{ port.clock }}</span>{% endif %}
+  </div>{% if port.comment %}
+  <div class="port__comment">{{ port.comment }}</div>{% endif %}
+</div>
+{%- endfor %}
+{%- else %}
+      <div class="empty-msg">—</div>
+{%- endif %}
+    </div>
+  </div>
+{%- if inouts %}
+  <div class="inout-strip">
+    <div class="inout-strip__heading">Inouts</div>
+    <div class="inout-strip__row">
+{%- for port in inouts %}
+<div class="port">
+  <div class="port__name">
+    <span class="port__name-text">{{ port.name }}</span>{% if port.width_str %}
+    <span class="badge badge--width">{{ port.width_str }}</span>{% endif %}
+    <span class="badge badge--{{ port.type_class }}">{{ port.type.value }}</span>{% if port.direction.value == "inout" %}
+    <span class="badge badge--inout">inout</span>{% endif %}{% if port.signed %}
+    <span class="badge badge--signed">signed</span>{% endif %}
+  </div>
+  <div class="port__meta">{% if port.default %}
+    <span class="badge badge--default">{{ port.default }}</span>{% endif %}{% if port.clock and port.type.value in ("reg", "logic") %}
+    <span class="badge badge--clk">clk: {{ port.clock }}</span>{% endif %}
+  </div>{% if port.comment %}
+  <div class="port__comment">{{ port.comment }}</div>{% endif %}
+</div>
+{%- endfor %}
+    </div>
+  </div>
+{%- endif %}
+{%- else %}
+  <div class="empty-msg">module {{ module.name }} (no ports)</div>
+{%- endif %}
+</div>
+</body>
+</html>
