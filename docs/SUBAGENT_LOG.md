@@ -95,6 +95,37 @@
 #### Commit
 - fd29900 "feat(diagram-svg): ElementTree-based SVG block diagram (light theme); 8 tests"
 
+### [2026-06-02] Subagent C — Excalidraw 框图生成器（Phase 4）
+
+**派发人**：小马
+**工具集**：file
+**模型**：MiniMax-M3
+**结果**：✅ 成功（547 秒内完成，**到达 max_iterations 上限**，但**所有文件已落地**）
+
+#### Prompt 摘要
+- 任务：实现 `excel2design/generators/diagram_excalidraw.py`（纯 dict + json.dumps，不用 Jinja2）
+- 关键约束：**严格 8 个测试**
+- Excalidraw schema 详细给出（type=excalidraw, version=2, 必填字段列表）
+- **seed 固定**（基于 port index 确定性数字）
+
+#### Response 摘要
+- 关键产出：
+  - `excel2design/generators/diagram_excalidraw.py` (247 行)
+  - `tests/generators/test_excalidraw.py` (138 行, **严格 8 个 tests**)
+- pytest 结果：**8/8 全过**（独立验证后）
+- 耗时：547 秒，50 次 API 调用（达到 max_iterations 上限，但产出完整）
+
+#### 决策记录
+- ✅ 采纳：seed 区间分配（rect 100001 / name 100002 / inputs 200000+ / outputs 300000+ / inouts 400000+）
+- ✅ 采纳：模块名 text 在矩形上方
+- ✅ 采纳：inout 端口沿底部居中分布
+- ✅ 采纳：empty_ports 不绘制 "(no ports)" 标记（与 HTML/SVG 风格略异，但符合 §4.4）
+- ⚠️ 与 HTML/SVG 不一致：empty_ports 模块在 Excalidraw 里只有 rect+name 2 个元素，没有 "(no ports)" 文字
+- 💡 学到的：subagent 在 max_iterations 时也会输出**完整**实现，但工具调用次数是瓶颈
+
+#### Commit
+- 6db2c6f "feat(diagram-excalidraw): hand-drawn block diagram (fixed seed, byte-stable); 8 tests"
+
 ---
 
 （Phase 4 启动后追加）

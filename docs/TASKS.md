@@ -45,9 +45,9 @@
 
 | Phase | 任务 | 执行人 | 状态 | subagent_log |
 |---|---|---|---|---|
-| 2 | HTML 框图 | Subagent A | ⏳ | 见 SUBAGENT_LOG.md |
-| 3 | SVG 框图 | Subagent B | ⏳ | 见 SUBAGENT_LOG.md |
-| 4 | Excalidraw 框图 | Subagent C | ⏳ | 见 SUBAGENT_LOG.md |
+| 2 | HTML 框图 | Subagent A | ✅ | 见 SUBAGENT_LOG.md (435503d, 17 tests) |
+| 3 | SVG 框图 | Subagent B | ✅ | 见 SUBAGENT_LOG.md (fd29900, 8 tests) |
+| 4 | Excalidraw 框图 | Subagent C | ✅ | 见 SUBAGENT_LOG.md (6db2c6f, 8 tests) |
 
 ## Phase 5a/5b — Verilog wrapper（小马亲自）
 

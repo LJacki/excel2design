@@ -4,6 +4,34 @@
 
 ---
 
+## v0.3.2 (2026-06-02) — Phase 2/3/4 三种框图（subagent 并行）
+
+3 个 subagent 并行实现，**33 个新测试全过**：
+
+### Phase 2 — HTML 框图（Subagent A）
+- `excel2design/generators/diagram_html.py` (129 行)
+- `excel2design/templates/diagram_html.j2` (251 行)
+- `tests/generators/test_html.py` (**17 tests**)
+- 浅色主题 + CSS 变量 + Flexbox 响应式
+
+### Phase 3 — SVG 框图（Subagent B）
+- `excel2design/generators/diagram_svg.py` (309 行)
+- `tests/generators/test_svg.py` (**8 tests**)
+- ElementTree 构造（不用 Jinja2，遵守 SPEC §9 ADR）
+
+### Phase 4 — Excalidraw 框图（Subagent C）
+- `excel2design/generators/diagram_excalidraw.py` (247 行)
+- `tests/generators/test_excalidraw.py` (**8 tests**)
+- 纯 dict + json.dumps，固定 seed 保证字节稳定
+
+### 关键经验
+- Subagent A 进程 600s 超时（但**产出完整**）— 提示：要**严格限制测试数量**到 8-10 个
+- Subagent B/C 在 388s / 547s 内完成
+- 三次都产出**测试全过**的高质量代码
+- 总计：166 → 174 测试
+
+---
+
 ## v0.3.1 (2026-06-01) — Phase 0/1/1.5 落地
 
 实现 18 个 commit：
