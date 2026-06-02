@@ -138,6 +138,32 @@ def test_to_verilog_expression() -> None:
     assert w.to_verilog() == "[DATA_WIDTH*2-1:0]"
 
 
+# ---- P0-1 fix: msb=None (default 1-bit from blank cell) ---------------------
+
+def test_to_verilog_default_1bit_omits_brackets() -> None:
+    """P0-1: When width cell is blank, parse_width returns msb=None.
+    to_verilog() must treat this as a 1-bit port and return '' (no brackets).
+    Regression: previously returned '[None:0]' which is not legal Verilog."""
+    w = parse_width(None, set(), sheet="t", row=1, col=1)
+    assert w.raw == "1"
+    assert w.msb is None
+    assert w.is_parameter is False
+    assert w.to_verilog() == ""
+
+
+def test_to_verilog_explicit_1bit_still_works() -> None:
+    """Explicit width='1' should still omit brackets (msb=0 path)."""
+    w = parse_width("1", set())
+    assert w.msb == 0
+    assert w.to_verilog() == ""
+
+
+def test_to_verilog_no_none_in_output() -> None:
+    """Never let 'None' leak into the Verilog output, regardless of input."""
+    w = parse_width(None, set(), sheet="t", row=1, col=1)
+    assert "None" not in w.to_verilog()
+
+
 # ---- error location propagation -------------------------------------------
 
 def test_error_attaches_sheet_row_col() -> None:

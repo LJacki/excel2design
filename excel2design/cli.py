@@ -188,6 +188,9 @@ def wrapper(excel: Path, module_name: str, output: Path | None) -> None:
         sys.exit(_exit_code(e))
 
     out_path = output or Path(f"./{module_name}.v")
+    # P1-5 fix: ensure parent dir exists, so single-file output works
+    # even when --output points to a not-yet-created directory.
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     v = generate_wrapper(m, source_file=excel.name, source_sheet=module_name)
     out_path.write_text(v, encoding="utf-8", newline="\n")
     click.echo(f"Wrote {out_path}")

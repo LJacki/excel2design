@@ -32,9 +32,9 @@ class PortWidth:
     def to_verilog(self) -> str:
         """Return the Verilog bit-index expression, e.g. '[7:0]' or '[DATA_WIDTH-1:0]'.
 
-        For width=1, returns '' (no bit-index in Verilog).
+        For width=1 (msb=0 OR msb=None with default 1-bit), returns '' (no bit-index).
         """
-        if not self.is_parameter and self.msb == 0:
+        if not self.is_parameter and (self.msb == 0 or self.msb is None):
             return ""
         if self.is_parameter:
             return f"[{self.raw}-1:0]"
@@ -43,7 +43,7 @@ class PortWidth:
 
 
 def parse_width(
-    raw: str,
+    raw: str | None,
     known_params: set[str],
     sheet: str = "<unknown>",
     row: int = 0,

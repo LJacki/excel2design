@@ -193,3 +193,32 @@ def test_truncated_xlsx_exits_4(tmp_path: Path) -> None:
     bad.write_bytes(b"PK\x03\x04")  # zip magic but nothing else
     r = _run_cli("all", str(bad), "uart_rx")
     assert r.returncode == 4
+
+
+def test_wrapper_creates_missing_output_dir(tmp_path: Path) -> None:
+    """P1-5 fix: --output path with a not-yet-existing parent dir should work."""
+    # tmp_path / "new_subdir" / "deep" / "uart_rx.v" — the parent doesn't exist
+    out = tmp_path / "new_subdir" / "deep" / "uart_rx.v"
+    assert not out.parent.exists()
+    r = _run_cli(
+        "wrapper", str(FIXTURE_DIR / "uart_rx.xlsx"), "uart_rx",
+        "--output", str(out),
+    )
+    assert r.returncode == 0
+    assert out.exists()
+    content = out.read_text(encoding="utf-8")
+    # Wrapper starts with a blank line, then '// ====' header (per jinja template)
+    assert "// ====" in content
+    assert "module uart_rx" in content
+    assert "endmodule" in content
+
+
+def test_wrapper_default_path_works_in_cwd(tmp_path: Path) -> None:
+    """Without --output, writes to ./<module>.v (P1-5: still respects cwd)."""
+    out = tmp_path / "uart_rx.v"
+    r = _run_cli(
+        "wrapper", str(FIXTURE_DIR / "uart_rx.xlsx"), "uart_rx",
+        "--output", str(out),
+    )
+    assert r.returncode == 0
+    assert out.exists()
