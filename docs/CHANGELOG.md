@@ -4,7 +4,26 @@
 
 ---
 
-## v0.3.3 (2026-06-02) — Phase 5 + Phase 6 + 收尾
+## v0.3.1 (2026-06-02) — v0.3 验收 P1 修复
+
+### 修复（基于 docs/REVIEW.md 评价）
+- **P1-3**：TODO 注释增加每个时钟域对应的 reset signal name 提示 + 匹配策略标签（explicit/name match/fallback/no port）
+- **P1-4**：`BadZipFile` / `InvalidFileException` 现在映射到 exit 4（SPEC §6）
+
+### 测试
+- 211 → **216 全过**（+3 wrapper + 2 e2e）
+- 修复后 4 fixture 全部正常生成
+
+### Commit
+- `a3e6330` "fix(wrapper): P1-3 add per-clock reset signal hint in TODO comment"
+- `1b1a46e` "fix(cli): P1-4 map BadZipFile/InvalidFileException to exit 4"
+
+### Tag
+- `v0.3.1`
+
+---
+
+## v0.3 (2026-06-02) — Phase 5 + Phase 6 + 收尾
 
 ### Phase 5 — Verilog Wrapper（23 tests, 197 总数）
 - `excel2design/generators/verilog.py` (110 行)
