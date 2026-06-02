@@ -897,6 +897,74 @@ def test_reset_type_none_with_default(none_module):
 
 ---
 
-**确认后我会**：
-1. 提交 SPEC v0.3 到 git
-2. 开 Phase 0（项目骨架 + pyproject.toml + 样例 Excel 生成脚本）
+## 15. 任务分配方案（v0.3 启动版）
+
+### 15.1 角色约定
+
+| 角色 | 责任 |
+|---|---|
+| **小马（统筹）** | 任务拆解、git 提交节奏、跨 phase 集成、卡点处理、给 Jack 阶段汇报 |
+| **小马（执行）** | Phase 0-1 全程（基础设施 + 解析器）、Phase 5 核心、Phase 6 |
+| **Subagent** | Phase 2/3/4 框图生成器（互不依赖可并行）、Phase 5a 基础 wrapper 部分 |
+| **Jack** | 关键决策 review（Phase 边界）、样例 Excel 拍板、最终验收 |
+
+### 15.2 分配原则
+
+- **核心代码**（解析器、wrapper 核心、CLI、异常）→ **小马亲自写**，避免返工
+- **机械重复代码**（HTML 框图、SVG 框图、Excalidraw 框图）→ **派子代理**，省时间
+- **可并行的 phase** → 同时派 2-3 个子代理，加速
+- **串行 phase** → 小马先做，子代理在依赖就位后接入
+
+### 15.3 Phase 分配明细
+
+| Phase | 执行人 | 备注 |
+|---|---|---|
+| 0 项目骨架 | 小马 | pyproject.toml / 目录结构 / 样例生成脚本 / .gitignore / CI 雏形 |
+| 1 解析器 | 小马 | 核心代码，§3.5 全部实现细节 |
+| **1.5** Golden baseline | 小马 | 4 个 fixture + expected/ 目录；本阶段是"刹车"，确保后面 phase 不会回退 |
+| 2 HTML 框图 | **Subagent A** | 单文件任务，参考 architecture-diagram skill 风格 |
+| 3 SVG 框图 | **Subagent B** | 与 2 并行，用 ElementTree 而非 Jinja2 |
+| 4 Excalidraw 框图 | **Subagent C** | 与 2/3 并行，需固定 seed 保稳定 |
+| 5a Wrapper 基础 | 小马 | 端口声明 + parameter 注入 + initial 块（不复杂，先打底） |
+| 5b Wrapper 复位 always | 小马 | 核心交付，多 clock 分块，TODOs 注释 |
+| 6 CLI + 集成 | 小马 | click 子命令 + e2e 测试 + README 截图 |
+
+### 15.4 Git 提交约定
+
+- **小颗粒提交**：每个可工作的中间态都提交，方便回滚
+- **commit message 格式**：`<type>(<scope>): <subject>`
+  - type: `feat` / `fix` / `docs` / `test` / `refactor` / `chore`
+  - scope: `phase0` / `parser` / `diagram-html` / `wrapper` / `cli` / ...
+  - 例: `feat(parser): add cell_to_str with type whitelist`
+- **Phase 边界提交**：每个 phase 结束打 tag `phase-N-done`（轻量 tag）
+- **Subagent 工作提交**：子代理完成任务后由小马统一 review + commit，commit message 带 `Co-authored-by: subagent`
+
+### 15.5 任务追踪文件
+
+- **`docs/TASKS.md`**：高粒度 todo，phase 进展，subagent 任务派发记录
+- **`docs/SUBAGENT_LOG.md`**：所有与 subagent 交互的 prompt / response 摘要（关键决策点）
+- **`docs/CHANGELOG.md`**：用户视角的 changelog（区别于 git log）
+
+### 15.6 卡点处理
+
+- **subagent 失败/质量差** → 重新派或转小马亲自写
+- **小马卡住超 30 分钟** → 写卡点记录到 `docs/TASKS.md` 末尾，继续推进其他 phase
+- **Jack 必须决策的事项** → 写进 `docs/TASKS.md` 的 "## Pending Decision" 段，等下次会话
+
+---
+
+## 16. 立即启动（v0.3 启动清单）
+
+按以下顺序执行，不依赖 Jack 决策：
+
+1. ✅ 完成（v0.3 SPEC 提交）
+2. ⏳ Step 1: 写 `docs/TASKS.md` + `docs/SUBAGENT_LOG.md` + `docs/CHANGELOG.md` 空文件
+3. ⏳ Step 2: Phase 0 — pyproject.toml / 目录结构 / 样例生成脚本
+4. ⏳ Step 3: Phase 1 — 数据模型 + 解析器（含 §3.5 全部实现细节）
+5. ⏳ Step 4: Phase 1.5 — Golden baseline 框架
+6. ⏳ Step 5: 并行派 Subagent A/B/C（HTML/SVG/Excalidraw 框图）
+7. ⏳ Step 6: Phase 5a/5b — wrapper（核心）
+8. ⏳ Step 7: Phase 6 — CLI + 集成 + README
+9. 📋 等 Jack 验收
+
+
