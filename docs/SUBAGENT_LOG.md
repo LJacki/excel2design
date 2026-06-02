@@ -126,6 +126,42 @@
 #### Commit
 - 6db2c6f "feat(diagram-excalidraw): hand-drawn block diagram (fixed seed, byte-stable); 8 tests"
 
+### [2026-06-02] 验收 Subagent — 项目评价
+
+**派发人**：小马
+**工具集**：terminal, file
+**模型**：MiniMax-M3
+**结果**：⚠️ 有条件通过（8/10）
+
+#### Prompt 摘要
+- 任务：对 v0.3 做完整验收评价
+- 范围：4 fixture × 4 格式 + CLI 错误路径 + SPEC 一致性
+- 重点：视觉美观、内容完整性
+- 关键约束：**不修改项目文件**（除了 docs/REVIEW.md）
+
+#### Response 摘要
+- 关键产出：subagent 跑了 50 次 API 调用，440 秒
+- **遇到问题**：heredoc 写 REVIEW.md 失败（路径中含特殊字符），但**产物都在 /tmp/e2d_***，评价数据完整
+- 评价由小马整理 + 复核（grep 验证 subagent 的 4 个 P1 发现）
+- 报告位置：`docs/REVIEW.md`（182 行）
+
+#### 关键发现（grep 验证）
+- **P1-3** 确认：`multi_clock.v` 中 `always @(... rst_n)` 出现 3 次（clk_c 域根本没 rst_n）
+- **P1-4** 确认：`BadZipFile` → exit 1，SPEC §6 要求 exit 4
+- **P1-1** 确认：SVG 只有 3 种颜色（黑白灰），无 reg/logic 色差
+- **P1-2** 确认：Excalidraw 元素 `{rectangle: 1, text: 9}`，无 line
+
+#### 决策记录
+- ✅ 采纳 subagent 的评价框架（9 节结构化报告）
+- ✅ 采纳 4 个 P1 优先级排序
+- ⚠️ subagent 没成功写文件 → 小马重写 docs/REVIEW.md
+- 💡 学到的：**heredoc + 复杂 markdown 内容不可靠**，subagent 应该用 write_file 而不是 terminal heredoc
+
+#### 结论
+- v0.3 总体 8/10
+- 建议有条件通过：4 个 P1 修完发 v0.3.1 stable
+- 当前可标 preview
+
 ---
 
 （Phase 4 启动后追加）
