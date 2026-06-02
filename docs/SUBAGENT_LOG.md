@@ -66,6 +66,35 @@
 #### Commit
 - 435503d "feat(diagram-html): light-theme block diagram generator (Jinja2 + CSS vars); 17 tests"
 
+### [2026-06-02] Subagent B — SVG 框图生成器（Phase 3）
+
+**派发人**：小马
+**工具集**：file
+**模型**：MiniMax-M3
+**结果**：✅ 成功（388 秒内完成，未超时）
+
+#### Prompt 摘要
+- 任务：实现 `excel2design/generators/diagram_svg.py`（ElementTree，**不要**用 Jinja2）
+- 关键约束：**严格 8 个测试**（吸取 subagent A 教训）
+- 浅色主题 + 圆角矩形 + 端口 tick + 字节稳定
+
+#### Response 摘要
+- 关键产出：
+  - `excel2design/generators/diagram_svg.py` (309 行)
+  - `tests/generators/test_svg.py` (125 行, **严格 8 个 tests**)
+- pytest 结果：**8/8 全过**（独立验证后）
+- 耗时：388 秒，25 次 API 调用
+
+#### 决策记录
+- ✅ 采纳：`_Layout` dataclass 集中计算坐标（一次走完）
+- ✅ 采纳：标签宽度估算 7px/char（粗略但够用）
+- ✅ 采纳：byte-stable 验证（ElementTree 字典序插入保证）
+- ✅ 采纳：inout 端口水平分布在模块底部
+- 💡 学到的：**严格 8 个测试**比"≥10 个"高效得多 — subagent 不再补全
+
+#### Commit
+- fd29900 "feat(diagram-svg): ElementTree-based SVG block diagram (light theme); 8 tests"
+
 ---
 
-（Phase 3/4 启动后追加）
+（Phase 4 启动后追加）
