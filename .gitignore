@@ -34,3 +34,4 @@ build/
 
 # OS
 Thumbs.db
+uart_rx*.v
