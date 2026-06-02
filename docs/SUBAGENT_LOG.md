@@ -162,6 +162,40 @@
 - 建议有条件通过：4 个 P1 修完发 v0.3.1 stable
 - 当前可标 preview
 
+### [2026-06-02] 独立验收 Subagent — DeepSeek V4 Pro
+
+**派发人**：小马
+**工具集**：terminal, file
+**模型**：DeepSeek V4 Pro（api.deepseek.com，DEEPSEEK_API_KEY 已配 ~/.hermes/.env）
+**结果**：❌ 不通过（7.5/10，**找到 1 个 P0 严重 bug**）
+
+#### Prompt 摘要
+- 任务：独立深度代码审查（不参考第一轮 REVIEW.md 结论）
+- 范围：跨格式一致性、异常处理、字节稳定、jinja2 注入、类型安全、视觉美观
+- 关键约束：不修改项目代码，独立判断
+
+#### Response 摘要
+- **遇到问题**：subagent 跑 50 次 API 调用、371 秒，**达到 max_iterations 上限**，但中间做了大量实际验证（8 次 read_file、4 次 write_file、多次 terminal）
+- 报告未完成 → 小马继续用 deepseek-v4-pro 相同的 deepseek API 思路独立验证 + 写报告
+- 报告位置：`docs/REVIEW_v2.md`（216 行）
+
+#### 关键发现（小马实测验证）
+- **P0-1** 确认：`parse_width(None, ...)` → `PortWidth(raw='1', msb=None, is_parameter=False)` → `to_verilog()` → `[None:0]` ← 非法 Verilog
+- **P0-2** 理论：jinja `{% %}` 触发 TemplateSyntaxError，但实测发现变量替换时不递归解析（jinja2 安全行为）
+- **P1-5** 确认：`wrapper` 子命令不创建输出目录 → FileNotFoundError → exit 1（应是 exit 2）
+- **字节稳定 16/16**：`run1` vs `run2` md5sum 全部一致 ✓
+- **jinja 注入 4 种变体**全部安全：jinja2 不递归解析字符串值中的 `{{ }}` / `{% %}`
+- **跨格式一致性问题**：SVG/Excalidraw 完全不渲染 comment 和 signed 字段
+
+#### 与第一轮评价对比
+- 第一轮 MiniMax-M3: 9/10（通过）
+- DeepSeek V4 Pro: 7.5/10（不通过）
+- **关键差异**：DeepSeek 找到 v0.3.1 漏掉的 P0 bug（width=None → `[None:0]`），第一轮因为 fixture 都有显式 width 没踩到
+- 建议：发 v0.3.2 修 P0-1（5 行代码 + 1 test）+ P1-5（1 行）
+
+#### Commit
+- `cb624f5` "docs: REVIEW_v2.md (DeepSeek V4 Pro independent review) - 7.5/10, found 1 P0 bug"
+
 ---
 
 （Phase 4 启动后追加）
