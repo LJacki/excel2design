@@ -1,0 +1,191 @@
+{
+  "name": "multi_clock",
+  "source_sheet": "multi_clock",
+  "parameters": [
+    {
+      "name": "WIDTH",
+      "value": "16",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "数据位宽"
+    }
+  ],
+  "ports": [
+    {
+      "name": "clk_a",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "domain A clock"
+    },
+    {
+      "name": "rst_a_n",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "domain A reset"
+    },
+    {
+      "name": "data_a",
+      "direction": "output",
+      "width": {
+        "raw": "WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "reg",
+      "default": "{WIDTH{1'b0}}",
+      "clock": "clk_a",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "data a"
+    },
+    {
+      "name": "valid_a",
+      "direction": "output",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "reg",
+      "default": "1'b0",
+      "clock": "clk_a",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "valid a"
+    },
+    {
+      "name": "clk_b",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "domain B clock"
+    },
+    {
+      "name": "rst_b_n",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "domain B reset"
+    },
+    {
+      "name": "data_b",
+      "direction": "output",
+      "width": {
+        "raw": "WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "reg",
+      "default": "{WIDTH{1'b0}}",
+      "clock": "clk_b",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "data b"
+    },
+    {
+      "name": "clk_c",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "domain C clock"
+    },
+    {
+      "name": "flag_c",
+      "direction": "output",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "reg",
+      "default": "1'b0",
+      "clock": "clk_c",
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "flag c (sync reset)"
+    },
+    {
+      "name": "bridge_in",
+      "direction": "input",
+      "width": {
+        "raw": "WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "from a to b"
+    },
+    {
+      "name": "bridge_out",
+      "direction": "output",
+      "width": {
+        "raw": "WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "reg",
+      "default": "{WIDTH{1'b0}}",
+      "clock": "clk_b",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "to a from b"
+    }
+  ]
+}

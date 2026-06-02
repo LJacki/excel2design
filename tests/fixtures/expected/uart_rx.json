@@ -1,0 +1,157 @@
+{
+  "name": "uart_rx",
+  "source_sheet": "uart_rx",
+  "parameters": [
+    {
+      "name": "DATA_WIDTH",
+      "value": "8",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "数据位宽"
+    },
+    {
+      "name": "FIFO_DEPTH",
+      "value": "16",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "FIFO 深度"
+    },
+    {
+      "name": "CLK_FREQ_MHZ",
+      "value": "100",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "时钟频率(MHz)"
+    }
+  ],
+  "ports": [
+    {
+      "name": "clk",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "系统时钟"
+    },
+    {
+      "name": "rst_n",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "异步低有效复位"
+    },
+    {
+      "name": "rx_pad",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "串行输入"
+    },
+    {
+      "name": "baud_tick",
+      "direction": "input",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "wire",
+      "default": null,
+      "clock": null,
+      "reset_type": "sync",
+      "signed": false,
+      "is_interface": false,
+      "comment": "波特率 tick"
+    },
+    {
+      "name": "rx_data",
+      "direction": "output",
+      "width": {
+        "raw": "DATA_WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "reg",
+      "default": "{DATA_WIDTH{1'b0}}",
+      "clock": "clk",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "接收数据"
+    },
+    {
+      "name": "rx_valid",
+      "direction": "output",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "reg",
+      "default": "1'b0",
+      "clock": "clk",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "接收有效"
+    },
+    {
+      "name": "fifo_full",
+      "direction": "output",
+      "width": {
+        "raw": "1",
+        "msb": 0,
+        "is_parameter": false
+      },
+      "type": "reg",
+      "default": "1'b0",
+      "clock": "clk",
+      "reset_type": "async",
+      "signed": false,
+      "is_interface": false,
+      "comment": "FIFO 满"
+    },
+    {
+      "name": "fifo_data",
+      "direction": "output",
+      "width": {
+        "raw": "DATA_WIDTH",
+        "msb": null,
+        "is_parameter": true
+      },
+      "type": "reg",
+      "default": "{DATA_WIDTH{1'b0}}",
+      "clock": "clk",
+      "reset_type": "async",
+      "signed": true,
+      "is_interface": false,
+      "comment": "FIFO 数据"
+    }
+  ]
+}

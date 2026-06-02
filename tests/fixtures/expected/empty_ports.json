@@ -1,0 +1,21 @@
+{
+  "name": "empty_ports",
+  "source_sheet": "empty_ports",
+  "parameters": [
+    {
+      "name": "VERSION",
+      "value": "1",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "版本号"
+    },
+    {
+      "name": "BUILD_DATE",
+      "value": "20260601",
+      "width": "32",
+      "param_type": "parameter",
+      "comment": "构建日期"
+    }
+  ],
+  "ports": []
+}
