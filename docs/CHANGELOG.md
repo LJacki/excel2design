@@ -4,6 +4,31 @@
 
 ---
 
+## v0.3.3 (2026-06-02) — Phase 5 + Phase 6 + 收尾
+
+### Phase 5 — Verilog Wrapper（23 tests, 197 总数）
+- `excel2design/generators/verilog.py` (110 行)
+- `excel2design/templates/verilog_wrapper.j2` (130 行) + `partial_always.j2`
+- **多 (clock, reset_type) always 分块**（SPEC §3.5.6）
+- 字节稳定铁律全部落实（LF 行尾 / 无 trailing whitespace / Jinja2 禁 random）
+- reset_type=none 行为修正（仅 initial 块，不生成 always 块）
+- **关键决策**：Jinja2 env `trim_blocks=False`（避免 for 循环吃掉换行导致端口挤一行）
+
+### Phase 6 — CLI + 端到端（14 tests, 211 总数）
+- `excel2design/cli.py` (180 行) — click 子命令
+  - `parse` / `diagram` / `wrapper` / `all`
+  - 退出码 0/2/3/4 按 SPEC §6
+- `tests/e2e/test_cli.py` (14 tests) — 端到端 subprocess 测试
+- README 大幅扩展（完整示例输出 / 项目结构 / 设计原则）
+
+### 总测试：**211 passed**
+
+### Tag
+- `phase-5-done` (commit d9419ae)
+- `phase-6-done` (commit e484a3a)
+
+---
+
 ## v0.3.2 (2026-06-02) — Phase 2/3/4 三种框图（subagent 并行）
 
 3 个 subagent 并行实现，**33 个新测试全过**：

@@ -53,24 +53,24 @@
 
 | ID | 任务 | 状态 | 完成时间 | commit |
 |---|---|---|---|---|
-| 5a.1 | templates/verilog_wrapper.j2 + Jinja2 env | ⏳ | | |
-| 5a.2 | generators/verilog.py — 端口 + parameter 注入 | ⏳ | | |
-| 5a.3 | generators/verilog.py — initial 块 | ⏳ | | |
-| 5a.4 | tests/unit/test_verilog.py 基础 case | ⏳ | | |
-| 5b.1 | 多 (clock, reset_type) 分组算法 | ⏳ | | |
-| 5b.2 | 异步/同步 always 块生成 | ⏳ | | |
-| 5b.3 | TODO 注释 + 字节稳定铁律落实 | ⏳ | | |
-| 5b.4 | tests/unit/test_verilog.py 高级 case（混合/多 clock/none） | ⏳ | | |
-| 5b.5 | iverilog -t null 语法 check | ⏳ | | |
+| 5a.1 | templates/verilog_wrapper.j2 + Jinja2 env | ✅ | Phase 5 | d9419ae |
+| 5a.2 | generators/verilog.py — 端口 + parameter 注入 | ✅ | Phase 5 | d9419ae |
+| 5a.3 | generators/verilog.py — initial 块 | ✅ | Phase 5 | d9419ae |
+| 5a.4 | tests/unit/test_verilog.py 基础 case | ✅ | Phase 5 | d9419ae |
+| 5b.1 | 多 (clock, reset_type) 分组算法 | ✅ | Phase 5 | d9419ae |
+| 5b.2 | 异步/同步 always 块生成 | ✅ | Phase 5 | d9419ae |
+| 5b.3 | TODO 注释 + 字节稳定铁律落实 | ✅ | Phase 5 | d9419ae |
+| 5b.4 | tests/unit/test_verilog.py 高级 case（混合/多 clock/none） | ✅ | Phase 5 | d9419ae |
+| 5b.5 | iverilog -t null 语法 check | ⏳ | — | iverilog 未装（环境无） |
 
 ## Phase 6 — CLI + 集成（1.5d）
 
 | ID | 任务 | 状态 | 完成时间 | commit |
 |---|---|---|---|---|
-| 6.1 | cli.py — click 子命令（parse/diagram/wrapper/all） | ⏳ | | |
-| 6.2 | tests/e2e/test_cli.py | ⏳ | | |
-| 6.3 | README 截图 + 完善文档 | ⏳ | | |
-| 6.4 | pyproject 入口点 + pip install -e . 验证 | ⏳ | | |
+| 6.1 | cli.py — click 子命令（parse/diagram/wrapper/all） | ✅ | Phase 6 | e484a3a |
+| 6.2 | tests/e2e/test_cli.py | ✅ | Phase 6 | e484a3a |
+| 6.3 | README 截图 + 完善文档 | ✅ | Phase 6 | (待 commit) |
+| 6.4 | pyproject 入口点 + pip install -e . 验证 | ✅ | Phase 0 | 65d16e6 |
 
 ---
 
