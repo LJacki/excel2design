@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.1 (draft)
+> 版本: v0.2
 > 最后更新: 2026-06-01
-> 状态: 待 Jack 确认
+> 状态: Jack 已确认核心设计，进入实现阶段
 
 ---
 
@@ -31,66 +31,101 @@
 ### 2.1 文件格式
 - `.xlsx`（openpyxl 默认）
 - 单个文件 = 一个项目（可包含多个模块）
+- 每个模块独立 sheet，sheet 名 = 模块名
 
 ### 2.2 Sheet 命名规则
-- **普通模块 sheet**：`{module_name}` — 例 `uart_rx`, `axi_crossbar`
-- **参数声明 sheet**：`@parameters` — **整个文件唯一**，声明所有模块共享的 parameter
+- **模块 sheet**：`{module_name}` — 例 `uart_rx`, `axi_crossbar`
+- 每个 sheet 是**两段式**布局：顶部 parameter 段 + 端口段，中间用 marker 行分隔
 
 **约定**：
-- 以 `@` 开头的 sheet 是元数据 sheet，不当作模块处理
-- 其他 sheet 一律当作模块处理
+- 一个 sheet 一个模块
 - sheet 名即为模块名，必须是合法 Verilog identifier
+- 不再使用 `@parameters` 这种文件级共享 sheet（v0.2 起参数归各模块所有）
 
-### 2.3 模块 Sheet 列定义（7 列固定）
+### 2.3 两段式布局
 
-| 列 | 字段 | 必填 | 类型 | 缺省值 | 说明 |
-|---|---|---|---|---|---|
-| A | `name` | ✅ | str | — | 端口名（信号名），必须是合法 Verilog identifier |
-| B | `direction` | ✅ | str | — | `input` / `output` / `inout`（大小写不敏感） |
-| C | `width` | ❌ | int/str | `1` | 位宽，整数或表达式（如 `ADDR_WIDTH`、`DATA_WIDTH*2`） |
-| D | `type` | ❌ | str | 见下 | `wire` / `reg` / `logic` |
-| E | `default` | ❌ | str | 空 | reg 的 reset 默认值（如 `1'b0`、`8'hFF`） |
-| F | `clock` | ❌ | str | 空 | 关联时钟名（仅 reg 用，提示给工程师） |
-| G | `comment` | ❌ | str | 空 | 端口说明 |
+每个模块 sheet 的行结构：
 
-**`type` 字段缺省推断规则**：
-- `output` + 无 type → `reg`（最常见的寄存器输出）
+```
+# === PARAMETERS ===          ← marker 行（# 开头，注释）
+name | value | width | param_type | comment
+...parameters...
+
+# === PORTS ===               ← marker 行
+name | direction | width | type | default | clock | reset_type | signed | interface | comment
+...ports...
+```
+
+**Marker 行**：
+- `# === PARAMETERS ===` / `# === PORTS ===`
+- 以 `#` 开头，表示段分隔
+- 解析器看到这个 marker 切到对应段
+- 两个 marker 都必须存在（即使其中一个为空段）
+- 两段之间可空任意行
+
+### 2.4 Parameter 段列定义（5 列）
+
+| 列 | 字段 | 必填 | 缺省 | 说明 |
+|---|---|---|---|---|
+| A | `name` | ✅ | — | parameter 名，合法 Verilog identifier |
+| B | `value` | ✅ | — | 默认值（int 或表达式，如 `ADDR_WIDTH-1`） |
+| C | `width` | ❌ | 空 | 位宽（int），空=无位宽（局部参数风格） |
+| D | `param_type` | ❌ | `parameter` | `parameter` / `localparam` |
+| E | `comment` | ❌ | 空 | 说明 |
+
+### 2.5 Port 段列定义（10 列）
+
+| 列 | 字段 | 必填 | 缺省 | 说明 |
+|---|---|---|---|---|
+| A | `name` | ✅ | — | 端口名，合法 Verilog identifier |
+| B | `direction` | ✅ | — | `input` / `output` / `inout`（大小写不敏感） |
+| C | `width` | ❌ | `1` | 位宽，int 或表达式（如 `DATA_WIDTH`、`DATA_WIDTH*2`） |
+| D | `type` | ❌ | 见下 | `wire` / `reg` / `logic` |
+| E | `default` | ❌ | 空 | reg 的 reset 默认值（`1'b0`、`8'hFF`、`{DATA_WIDTH{1'b0}}`） |
+| F | `clock` | ❌ | 空 | 关联时钟名（仅 reg 用） |
+| G | `reset_type` | ❌ | `sync` | reg 复位行为：`sync` / `async` / `none` |
+| H | `signed` | ❌ | `0` | `1` = signed 端口，wrapper 会加 `signed` 关键字 |
+| I | `interface` | ❌ | `0` | `1` = interface 风格端口（v0 仅记录，不做特殊处理） |
+| J | `comment` | ❌ | 空 | 端口说明 |
+
+**`type` 字段缺省推断规则**（不变）：
+- `output` + 无 type → `reg`
 - `input` + 无 type → `wire`
 - `inout` + 无 type → `wire`
 
+**`reset_type` 语义**：
+- `sync` — 同步复位（always 块中 `if(rst_n)` 风格）
+- `async` — 异步复位（敏感列表含 `posedge clk or negedge rst_n`）
+- `none` — 无复位行为（不需要 reset 块）
+
 **特殊行约定**：
-- 第一行是表头（`name | direction | width | type | default | clock | comment`）
-- 之后每行一个端口
+- 第一行（紧跟 marker）是表头
+- 之后每行一条记录
 - 整行空白 → 跳过
 - `#` 开头 → 注释行，跳过
+- `reset_type` 不适用 wire/inout，填什么值都会被忽略
 
-### 2.4 @parameters Sheet 列定义（5 列）
+### 2.6 完整样例 Excel（v0.2）
 
-| 列 | 字段 | 必填 | 类型 | 说明 |
-|---|---|---|---|---|
-| A | `name` | ✅ | str | parameter 名 |
-| B | `value` | ✅ | int/str | 默认值 |
-| C | `width` | ❌ | int | 位宽，可空（无位宽=局部参数） |
-| D | `type` | ❌ | str | `parameter`（默认）/ `localparam` |
-| E | `comment` | ❌ | str | 说明 |
+**Sheet: `uart_rx`**（单 sheet 示例）
+```
+# === PARAMETERS ===
+name            | value | width | param_type | comment
+DATA_WIDTH      | 8     | 32    | parameter  | 数据位宽
+FIFO_DEPTH      | 16    | 32    | parameter  | FIFO 深度
+CLK_FREQ_MHZ    | 100   | 32    | parameter  | 时钟频率(MHz)
 
-### 2.5 样例 Excel（examples/sample_module.xlsx 预期内容）
-
-**Sheet 1: `@parameters`**
-| name | value | width | type | comment |
-|---|---|---|---|---|
-| DATA_WIDTH | 8 | 32 | parameter | 数据位宽 |
-| ADDR_WIDTH | 16 | 32 | parameter | 地址位宽 |
-
-**Sheet 2: `uart_rx`**
-| name | direction | width | type | default | clock | comment |
-|---|---|---|---|---|---|---|
-| clk | input | 1 | wire | | | 系统时钟 |
-| rst_n | input | 1 | wire | | | 异步低有效复位 |
-| rx_data | output | 8 | reg | 8'h00 | clk | 接收数据 |
-| rx_valid | output | 1 | reg | 1'b0 | clk | 接收有效 |
-| baud_tick | input | 1 | wire | | | 波特率 tick |
-| rx_pad | input | 1 | wire | | | 串行输入 |
+# === PORTS ===
+name        | direction | width      | type | default                     | clock | reset_type | signed | interface | comment
+clk         | input     | 1          | wire |                             |       |            | 0      | 0         | 系统时钟
+rst_n       | input     | 1          | wire |                             |       |            | 0      | 0         | 异步低有效复位
+rx_pad      | input     | 1          | wire |                             |       |            | 0      | 0         | 串行输入
+baud_tick   | input     | 1          | wire |                             |       |            | 0      | 0         | 波特率 tick
+rx_data     | output    | DATA_WIDTH | reg  | {DATA_WIDTH{1'b0}}          | clk   | async      | 0      | 0         | 接收数据
+rx_valid    | output    | 1          | reg  | 1'b0                        | clk   | async      | 0      | 0         | 接收有效
+fifo_full   | output    | 1          | reg  | 1'b0                        | clk   | async      | 0      | 0         | FIFO 满
+fifo_data   | output    | DATA_WIDTH | reg  | {DATA_WIDTH{1'b0}}          | clk   | async      | 1      | 0         | FIFO 数据 (signed)
+```
 
 ---
 
@@ -98,27 +133,49 @@
 
 ### 3.1 Port
 ```python
+class Direction(Enum):
+    INPUT = "input"
+    OUTPUT = "output"
+    INOUT = "inout"
+
+class SignalType(Enum):
+    WIRE = "wire"
+    REG = "reg"
+    LOGIC = "logic"
+
+class ResetType(Enum):
+    SYNC = "sync"
+    ASYNC = "async"
+    NONE = "none"
+
 @dataclass
 class Port:
     name: str                    # "rx_data"
-    direction: Direction         # enum: INPUT/OUTPUT/INOUT
+    direction: Direction
     width: str                   # "8" 或 "DATA_WIDTH" (保留原始表达式)
-    type: SignalType             # enum: WIRE/REG/LOGIC
-    default: Optional[str]       # "8'h00"
+    type: SignalType
+    default: Optional[str]       # "{DATA_WIDTH{1'b0}}"
     clock: Optional[str]         # "clk"
-    comment: Optional[str]       # "接收数据"
-    msb: int                     # 解析后的 MSB（width=8 → msb=7）
+    reset_type: ResetType        # 默认 SYNC
+    signed: bool                 # False
+    is_interface: bool           # False
+    comment: Optional[str]
+    msb: Optional[int]           # 解析后的 MSB（width=8 → 7）；参数化宽度时为 None
     is_parameter_width: bool     # width 是否含 parameter 名
 ```
 
 ### 3.2 Parameter
 ```python
+class ParamType(Enum):
+    PARAMETER = "parameter"
+    LOCALPARAM = "localparam"
+
 @dataclass
 class Parameter:
     name: str
     value: str                   # "8" / "ADDR_WIDTH-1"
-    width: Optional[str]
-    param_type: ParamType        # PARAMETER / LOCALPARAM
+    width: Optional[str]         # "32" 或 None
+    param_type: ParamType
     comment: Optional[str]
 ```
 
@@ -128,7 +185,7 @@ class Parameter:
 class Module:
     name: str                                    # "uart_rx"
     ports: list[Port]
-    parameters: list[Parameter]                  # 来自 @parameters
+    parameters: list[Parameter]                  # 本模块私有的 parameter
     source_file: Path                            # Excel 路径（用于 wrapper 注释）
     source_sheet: str                            # 源 sheet 名
 
@@ -137,13 +194,18 @@ class Module:
     def inouts(self) -> list[Port]: ...
     def regs(self) -> list[Port]: ...
     def wires(self) -> list[Port]: ...
+    def async_regs(self) -> list[Port]: ...      # reset_type=async
+    def sync_regs(self) -> list[Port]: ...       # reset_type=sync
+    def no_reset_regs(self) -> list[Port]: ...   # reset_type=none
+    def primary_clock(self) -> Optional[str]: ...# 出现次数最多的 clock 名
 ```
 
 ### 3.4 异常
-- `ExcelParseError` — Excel 格式/列缺失
-- `PortValidationError` — 端口名非法/方向非法
+- `ExcelParseError` — Excel 格式/列缺失/marker 缺失
+- `PortValidationError` — 端口名非法/方向非法/位宽非法
 - `DuplicatePortError` — 同名端口
 - `ModuleNotFoundError` — sheet 不存在
+- `MarkerMissingError` — `# === PARAMETERS ===` / `# === PORTS ===` 缺失
 
 ---
 
@@ -213,57 +275,85 @@ class Module:
 |---|---|---|
 | 文件头注释 | ✅ | 模块名、源 Excel、时间戳、生成器版本 |
 | `module ... endmodule` | ✅ | — |
-| 端口声明 | ✅ | 按 input/output 分组，inout 在最后 |
-| `parameter` / `localparam` | ✅ | 从 @parameters 读 |
+| 端口声明 | ✅ | 按 input/output/inout 分组 |
+| `parameter` / `localparam` | ✅ | 从本模块 parameter 段读 |
 | 内部 signal 声明 | ✅ | input 端 wire，output 端 reg |
 | `initial` 块 | ✅ | 只为带 `default` 的 reg 生成 |
-| `always` 块 | ❌ | **不生成**，留给工程师 |
-| TODO 注释 | ✅ | 标出"用户实现区" |
-| 功能逻辑 | ❌ | **绝不生成** |
+| `always` 块（复位模板） | ✅ | **为每个有 default 的 reg 生成** 复位 always（按 reset_type 风格） |
+| TODO 注释 | ✅ | 标出"用户实现区"+ 复位行为清单 |
+| 时间戳注释 | ✅ | `// Generated: <time> by excel2design v0.x` |
+| 功能逻辑（非复位 always） | ❌ | **不生成**，留给工程师 |
+| 时钟产生 | ❌ | **不生成** |
 
-### 5.2 输出示例（基于样例 Excel）
+### 5.2 输出示例（基于 v0.2 样例 Excel）
 
 ```verilog
 // =====================================================
 // Module:    uart_rx
-// Source:    sample_module.xlsx / sheet: uart_rx
-// Generated: 2026-06-01 14:30:00 by excel2design v0.1
+// Source:    examples/sample_module.xlsx / sheet: uart_rx
+// Generated: 2026-06-01 14:30:00 by excel2design v0.2
 // =====================================================
 // Company Confidential
 // =====================================================
 
 module uart_rx #(
-    parameter DATA_WIDTH = 8,
-    parameter ADDR_WIDTH = 16
+    parameter DATA_WIDTH   = 8,
+    parameter FIFO_DEPTH   = 16,
+    parameter CLK_FREQ_MHZ = 100
 ) (
     // ---------- INPUTS ----------
-    input  wire                 clk,
-    input  wire                 rst_n,
-    input  wire                 baud_tick,
-    input  wire                 rx_pad,
+    input  wire                       clk,
+    input  wire                       rst_n,
+    input  wire                       rx_pad,
+    input  wire                       baud_tick,
 
     // ---------- OUTPUTS ----------
-    output reg  [DATA_WIDTH-1:0] rx_data,
-    output reg                   rx_valid
+    output reg  [DATA_WIDTH-1:0]      rx_data,    // async reset
+    output reg                        rx_valid,   // async reset
+    output reg                        fifo_full,  // async reset
+    output reg  signed [DATA_WIDTH-1:0] fifo_data // async reset
 );
 
     // ---------- INTERNAL WIRES ----------
     // (none)
 
     // ---------- INTERNAL REGS ----------
-    // rx_data, rx_valid already declared in port list
+    // rx_data, rx_valid, fifo_full, fifo_data already declared in port list
 
     // ---------- INITIAL ----------
     initial begin
-        rx_data  = DATA_WIDTH'(8'h00);
-        rx_valid = 1'b0;
+        rx_data   = {DATA_WIDTH{1'b0}};
+        rx_valid  = 1'b0;
+        fifo_full = 1'b0;
+        fifo_data = {DATA_WIDTH{1'b0}};
+    end
+
+    // ---------- ASYNC RESET ALWAYS ----------
+    // Generated for: rx_data, rx_valid, fifo_full, fifo_data
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rx_data   <= {DATA_WIDTH{1'b0}};
+            rx_valid  <= 1'b0;
+            fifo_full <= 1'b0;
+            fifo_data <= {DATA_WIDTH{1'b0}};
+        end else begin
+            // TODO: drive these regs
+        end
     end
 
     // =================================================
-    // TODO: Implement uart_rx logic here
+    // TODO: Implement uart_rx logic above (in the else branch)
+    // 
+    // Module: uart_rx
     // Clock: clk
     // Reset: rst_n (active low, async)
-    // Register defaults: rx_data=8'h00, rx_valid=1'b0
+    // Parameters: DATA_WIDTH, FIFO_DEPTH, CLK_FREQ_MHZ
+    //
+    // Registers and reset behavior:
+    //   rx_data   : async reset to {DATA_WIDTH{1'b0}}
+    //   rx_valid  : async reset to 1'b0
+    //   fifo_full : async reset to 1'b0
+    //   fifo_data : async reset to {DATA_WIDTH{1'b0}}  (signed)
     // =================================================
 
 endmodule
@@ -278,12 +368,46 @@ endmodule
 ### 5.4 端口格式规则
 - `width=1`：省略位宽（`input wire clk`）
 - `width>1`：位宽用表达式（`[DATA_WIDTH-1:0]`）
-- 同一方向同一类型连续时，类型不重复写（但 v0 简化为每个端口都带类型，更清晰）
+- `signed=1`：在位宽前加 `signed` 关键字
+- 同组同 type 连续时 v0 简化为每行都带类型（更清晰，便于行内注释）
 
-### 5.5 TODO 注释规则
-- 列出该模块所有 reg 端口及其 default
-- 列出时钟和复位信号
-- 列出该 module 涉及的所有 parameter 名
+### 5.5 复位 always 块生成规则
+
+**触发条件**：模块中存在带 `default` 的 reg。
+
+**分块规则**（按 reset_type 分）：
+- 所有 `async` 的 reg → 一个 `always @(posedge clk or negedge rst_n)` 块
+- 所有 `sync` 的 reg → 一个 `always @(posedge clk)` 块
+- 所有 `none` 的 reg → **不生成 always 块**，但 TODO 注释里列出
+- 混合 reset_type → 多个 always 块（按类型分组）
+
+**块内结构**（async 为例）：
+```verilog
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        <每个 reg 用其 default 值复位>
+    end else begin
+        // TODO: drive these regs
+    end
+end
+```
+
+**块内结构**（sync 为例）：
+```verilog
+always @(posedge clk) begin
+    if (!rst_n) begin
+        <每个 reg 用其 default 值复位>
+    end else begin
+        // TODO: drive these regs
+    end
+end
+```
+
+### 5.6 TODO 注释规则
+- 列出所有 reg 及其 reset 行为
+- 列出模块的主时钟和复位信号
+- 列出该模块涉及的所有 parameter 名
+- 注明哪些 reg 暂未生成 always（`reset_type=none` 的）
 
 ---
 
@@ -362,17 +486,35 @@ generate_wrapper(module, output=Path("out/uart_rx.v"))
 
 ---
 
-## 10. 开放问题（v0.1 暂缓）
+## 10. 开放问题（v0.2 暂缓）
 
-- [ ] 是否需要支持 .xls（旧格式）？v0 只做 .xlsx
-- [ ] 是否需要支持从 wrapper 反向生成 Excel？v0 不做
-- [ ] Excalidraw 是否需要带 PNG 导出？v0 只输出 .excalidraw JSON
-- [ ] HTML 框图是否需要交互（hover 显示 comment）？v0 先做静态
-- [ ] 是否支持多个同名 module（不同实例）？v0 每个 sheet 一个 module 名
+- [ ] 是否需要支持 .xls（旧格式）？v0.2 只做 .xlsx
+- [ ] 是否需要支持从 wrapper 反向生成 Excel？v0.2 不做
+- [ ] Excalidraw 是否需要带 PNG 导出？v0.2 只输出 .excalidraw JSON
+- [ ] HTML 框图是否需要交互（hover 显示 comment）？v0.2 先做静态
+- [ ] `interface=1` 端口是否需要特殊处理（生成 `mod_port`）？v0.2 仅记录，后续版本实现
+- [ ] 是否需要支持 Excel 模板文件（用户自定义列名/列序）？v0.2 固定 5/10 列
+- [ ] 多 module 共享 parameter（如多个 AXI 模块共用 `ADDR_WIDTH`）？v0.2 改为模块级后，跨模块共享需手动复制
+
+---
+
+## 11. v0.1 → v0.2 变更日志
+
+| 项 | v0.1 | v0.2 | 原因 |
+|---|---|---|---|
+| Parameter 位置 | 独立 `@parameters` sheet | 每个模块 sheet 顶部 | 参数属于模块，跨 sheet 找不便 |
+| Port 列数 | 7 列 | 10 列 | 补 reset_type / signed / interface |
+| reset_type | 无 | 新增 sync/async/none | 支持自动生成复位 always |
+| signed | 无 | 新增 | 数字信号经常需要 signed |
+| interface 标记 | 无 | 新增（v0 仅记录） | 后续扩展 SV interface 留口子 |
+| 复位 always | 不生成 | 自动按 reset_type 分块生成 | 减少工程师样板代码 |
+| TODO 注释 | 简单 | 完整（含 reset 行为、parameter 清单） | 上下文更全 |
+| initial 块 | `DATA_WIDTH'(8'h00)` | `{DATA_WIDTH{1'b0}}` | 真正的参数化写法 |
+| 样例 Excel | 2 sheet（@parameters + uart_rx） | 1 sheet（uart_rx 内分两段） | 与新结构对齐 |
 
 ---
 
 **确认后我会**：
-1. 提交 SPEC.md 到 git
-2. 开始 Phase 0（项目骨架 + 样例 Excel）
-3. 每个 Phase 结束都汇报进度，等你确认后再进下一个
+1. 提交 SPEC v0.2 到 git
+2. 写 README.md
+3. 开始 Phase 0（项目骨架 + 样例 Excel）
