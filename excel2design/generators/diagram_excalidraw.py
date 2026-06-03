@@ -55,8 +55,9 @@ def _port_label(p: Port) -> str:
         if p.width.raw == "1":
             return p.name
         return f"{p.name}[{p.width.raw}-1:0]"
-    assert p.width.msb is not None
-    if p.width.msb == 0:
+    # P0-3 fix: tolerate msb=None (default 1-bit from blank cell) — mirrors
+    # PortWidth.to_verilog() so all 4 outputs handle 1-bit consistently.
+    if p.width.msb is None or p.width.msb == 0:
         return p.name
     return f"{p.name}[{p.width.msb}:0]"
 

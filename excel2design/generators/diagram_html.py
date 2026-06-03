@@ -54,8 +54,9 @@ class PortView:
             else:
                 width_str = f"[{p.width.raw}-1:0]"
         else:
-            assert p.width.msb is not None
-            if p.width.msb == 0:
+            # P0-3 fix: tolerate msb=None (default 1-bit from blank cell) — mirrors
+            # PortWidth.to_verilog() so all 4 outputs handle 1-bit consistently.
+            if p.width.msb is None or p.width.msb == 0:
                 width_str = ""
             else:
                 width_str = f"[{p.width.msb}:0]"
