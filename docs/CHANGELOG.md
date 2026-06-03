@@ -4,6 +4,23 @@
 
 ---
 
+## v0.3.3 (2026-06-03) — DeepSeek V4 Pro 第三轮审查修复
+
+### 修复
+- **P0-3**：3 个图表生成器（HTML/SVG/Excalidraw）修复 `assert msb is not None` 崩溃问题，统一与 `to_verilog()` 对称处理 `msb=None` 边界
+
+### 测试
+- 221 → **227 全过**（+6 P0-3 测试）
+- 验证：`excel2design all` / `diagram` 子命令遇到 width=None 不再 AssertionError
+
+### Commit
+- `b33fa04` "fix: P0-3 diagram generators now tolerate width=None (3 generators, 6 tests)"
+
+### Tag
+- `v0.3.3`
+
+---
+
 ## v0.3.2 (2026-06-02) — DeepSeek V4 Pro 审查修复
 
 ### 修复（基于 docs/REVIEW_v2.md 评价）
