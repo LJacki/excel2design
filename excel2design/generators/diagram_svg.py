@@ -21,7 +21,6 @@ SIDE_PAD = 20
 TOP_HEADER = 34
 BODY_PAD_TOP = 10
 BODY_PAD_BOTTOM = 10
-PARAM_LINE_H = 12     # height for compact parameter line
 INOUT_STRIP = 32
 MIN_CANVAS_W = 400
 MIN_CANVAS_H = 180
@@ -71,23 +70,24 @@ class _Layout:
                      MIN_CANVAS_W - LABEL_GAP * 4, 200)
 
         n_rows = max(len(self.inputs), len(self.outputs), 1)
-        param_rows = len(module.parameters)
+        n_params = len(module.parameters)
         body_h = BODY_PAD_TOP + n_rows * ROW_HEIGHT + BODY_PAD_BOTTOM
-        if param_rows > 0:
-            body_h += PARAM_LINE_H
-        self.has_params = param_rows > 0
+
+        # Parameters go outside the box, between title and rect
+        param_block_h = n_params * 14 + 4 if n_params > 0 else 0
+        self.param_block_h = param_block_h
 
         inout_strip_h = INOUT_STRIP if self.inouts else 0
 
         left_margin = self.max_in_w + LABEL_GAP + ARROW_LENGTH + 12
         right_margin = self.max_out_w + LABEL_GAP + ARROW_LENGTH + 12
         canvas_w = max(left_margin + body_w + right_margin, MIN_CANVAS_W)
-        canvas_h = max(TOP_HEADER + body_h + inout_strip_h + 12, MIN_CANVAS_H)
+        canvas_h = max(TOP_HEADER + param_block_h + body_h + inout_strip_h + 20, MIN_CANVAS_H)
 
         self.canvas_w = canvas_w
         self.canvas_h = canvas_h
         self.body_x = left_margin
-        self.body_y = TOP_HEADER + 6
+        self.body_y = TOP_HEADER + param_block_h + 8
         self.body_w = body_w
         self.body_h = body_h
         self.inout_strip_h = inout_strip_h
@@ -95,9 +95,7 @@ class _Layout:
         self.left_x = self.body_x
         self.right_x = self.body_x + self.body_w
         self.row_top = self.body_y + BODY_PAD_TOP + ROW_HEIGHT // 2
-        if param_rows > 0:
-            self.row_top += PARAM_LINE_H
-        self.param_y = self.body_y + BODY_PAD_TOP
+        self.param_start_y = TOP_HEADER + 4
 
 
 # ---- Markers (per clock domain) -------------------------------------------
@@ -198,18 +196,19 @@ def generate_svg(module: Module) -> str:
         "fill": COLOR_BG, "stroke": COLOR_STROKE, "stroke-width": "1.5",
     })
 
-    # Parameters — compact single line at top-left inside box
+    # Parameters — outside the box, between title and module rect
     if module.parameters:
-        param_line = ", ".join(f"{p.name}={p.value}" for p in module.parameters)
-        pt = ET.SubElement(svg, "text", {
-            "x": str(layout.body_x + 8),
-            "y": str(layout.body_y + BODY_PAD_TOP + 8),
-            "font-family": FONT_FAMILY,
-            "font-size": "9",
-            "fill": COLOR_MUTED,
-            "font-style": "italic",
-        })
-        pt.text = param_line
+        for i, p in enumerate(module.parameters):
+            py = layout.param_start_y + i * 14 + 10
+            pt = ET.SubElement(svg, "text", {
+                "x": str(layout.body_x + 4),
+                "y": str(py),
+                "font-family": FONT_FAMILY,
+                "font-size": "10",
+                "fill": COLOR_MUTED,
+                "font-style": "italic",
+            })
+            pt.text = f"{p.name}={p.value}"
 
     # Input ports
     for i, p in enumerate(layout.inputs):

@@ -1,32 +1,31 @@
 """Clock-domain color mapping for diagrams.
 
-Two palettes: vibrant blue series for inputs, vibrant green for outputs.
+Bright, saturated palettes: blue series for inputs, green for outputs.
 Same clock name → same palette index, but different color per direction.
-Ports without a clock assignment use neutral gray.
 """
 
 from __future__ import annotations
 
 _BLUE_PALETTE = [
-    "#2196F3",  # material blue
-    "#00BCD4",  # cyan
-    "#42A5F5",  # light blue
-    "#26C6DA",  # bright cyan
-    "#448AFF",  # indigo-blue
-    "#40C4FF",  # sky blue
-    "#1E88E5",  # medium blue
+    "#00B0FF",  # bright sky blue
+    "#40C4FF",  # light blue
+    "#00E5FF",  # cyan
     "#18FFFF",  # aqua
+    "#0091EA",  # vivid blue
+    "#03A9F4",  # light blue
+    "#00BCD4",  # teal-cyan
+    "#4FC3F7",  # soft blue
 ]
 
 _GREEN_PALETTE = [
-    "#4CAF50",  # material green
-    "#8BC34A",  # light green
-    "#69F0AE",  # mint
     "#00E676",  # bright green
     "#76FF03",  # lime
-    "#AEEA00",  # yellow-green
+    "#69F0AE",  # mint
+    "#B9F6CA",  # pale green
+    "#C6FF00",  # yellow-green
     "#64DD17",  # vivid green
-    "#B2FF59",  # pale green
+    "#AEEA00",  # chartreuse
+    "#00C853",  # emerald
 ]
 
 _NEUTRAL_COLOR = "#999999"
