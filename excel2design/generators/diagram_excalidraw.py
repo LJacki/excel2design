@@ -36,7 +36,7 @@ ARROW_H = 4            # arrow element height (thin line)
 TEXT_H = 28            # label text element height
 GAP = 8                # gap between elements
 RECT_PAD = 40          # padding from canvas edge
-UNIFORM_PAD = 30       # extra arrow length beyond text width
+UNIFORM_PAD = 50       # extra arrow length beyond text width (~4 chars)
 
 # Font settings (Helvetica / Normal — clean, not hand-drawn)
 FONT_SIZE = 20
