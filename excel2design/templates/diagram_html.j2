@@ -197,7 +197,7 @@ html, body {
 {%- for port in inputs %}
 <div class="port">
   <div class="port__name-row">
-    <span class="port__arrow port__arrow--in">&#8594;</span>
+    <span class="port__arrow" style="color:{{ port.arrow_color }}">&#8594;</span>
     <span class="port__name-text">{{ port.name }}</span>{% if port.width_str %}
     <span class="badge badge--width">{{ port.width_str }}</span>{% endif %}
     <span class="badge badge--{{ port.type_class }}">{{ port.type.value }}</span>{% if port.signed %}
@@ -224,11 +224,11 @@ html, body {
 {%- for port in outputs %}
 <div class="port">
   <div class="port__name-row">
+    <span class="port__arrow" style="color:{{ port.arrow_color }}">&#8594;</span>
     <span class="port__name-text">{{ port.name }}</span>{% if port.width_str %}
     <span class="badge badge--width">{{ port.width_str }}</span>{% endif %}
     <span class="badge badge--{{ port.type_class }}">{{ port.type.value }}</span>{% if port.signed %}
     <span class="badge badge--signed">signed</span>{% endif %}
-    <span class="port__arrow port__arrow--out">&#8594;</span>
   </div>
 {%- if port.default or port.clock %}
   <div class="port__meta">{% if port.default %}

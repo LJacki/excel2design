@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 
 from excel2design.core.models import Module, Port
+from excel2design.utils.clock_colors import clock_color
 
 
 # ---- Layout constants (all integer px) --------------------------------------
@@ -220,15 +221,15 @@ def generate_excalidraw(module: Module) -> str:
     n_in = len(inputs)
     in_half = (n_in - 1) * ROW_SPACING // 2 if n_in > 0 else 0
     center_y = RECT_Y + rect_h // 2
-    for i, label in enumerate(in_labels):
+    for i, p in enumerate(inputs):
+        label = in_labels[i]
         arrow_id = f"arrow-in-{i}"
         text_id = f"text-in-{i}"
         ax = rect_x - uniform_in_len - GAP
         ay = center_y - in_half + i * ROW_SPACING
-        # Arrow
         elements.append(
             _arrow(arrow_id, ax, ay, uniform_in_len,
-                   seed=seed_base + 10 + i, stroke_color=COLOR_ARROW_IN)
+                   seed=seed_base + 10 + i, stroke_color=clock_color(p.clock))
         )
         # Text bound to arrow, centered within it
         tw = _text_w(label)
@@ -241,14 +242,15 @@ def generate_excalidraw(module: Module) -> str:
     # ---- Output ports (right side) ----------------------------------------
     n_out = len(outputs)
     out_half = (n_out - 1) * ROW_SPACING // 2 if n_out > 0 else 0
-    for i, label in enumerate(out_labels):
+    for i, p in enumerate(outputs):
+        label = out_labels[i]
         arrow_id = f"arrow-out-{i}"
         text_id = f"text-out-{i}"
         ax = rect_x + rect_w + GAP
         ay = center_y - out_half + i * ROW_SPACING
         elements.append(
             _arrow(arrow_id, ax, ay, uniform_out_len,
-                   seed=seed_base + 200 + i, stroke_color=COLOR_ARROW_OUT)
+                   seed=seed_base + 200 + i, stroke_color=clock_color(p.clock))
         )
         tw = _text_w(label)
         tx = ax + (uniform_out_len - tw) // 2

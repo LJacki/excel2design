@@ -18,6 +18,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from excel2design.core.models import Module, Port, SignalType
+from excel2design.utils.clock_colors import clock_color
 
 
 # Template lives next to this module under excel2design/templates/.
@@ -44,6 +45,7 @@ class PortView:
     clock: str | None
     signed: bool
     comment: str | None
+    arrow_color: str          # clock-domain color for the arrow
 
     @classmethod
     def from_port(cls, p: Port) -> "PortView":
@@ -70,6 +72,7 @@ class PortView:
             clock=p.clock,
             signed=p.signed,
             comment=p.comment,
+            arrow_color=clock_color(p.clock),
         )
 
 
