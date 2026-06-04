@@ -1,5 +1,5 @@
 {# Verilog wrapper template per SPEC §5.
-   v0.4: column-aligned port/parameter declarations (pre-formatted in Python). #}
+   v0.4.1: column-aligned ports/params, clean tail, no redundant wire decls. #}
 // =====================================================
 // Module:    {{ module.name }}
 // Source:    {{ source_file }}{{ " / sheet: " + source_sheet if source_sheet else "" }}
@@ -34,26 +34,12 @@ module {{ module.name }} (
 {%- endfor %}
 {%- endif %}
 );
-{%- for port in internal_wires %}
-
-    wire {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "" }}{{ port.name }};
-{%- endfor %}
-{%- if not internal_wires %}
-
-    // (none — all wires are input ports)
-{%- endif %}
-
-    // ---------- INTERNAL REGS ----------
-    // (output ports are already declared as regs in the port list)
-{%- for port in internal_regs %}
-    // {{ port.name }}: default = {{ port.default }} (declared in port list)
-{%- endfor %}
 {%- if regs_with_default %}
 
     // ---------- INITIAL ----------
     initial begin
-{%- for port in regs_with_default %}
-        {{ port.name }} = {{ port.default }};
+{%- for reg in regs_with_default %}
+        {{ reg.name }} = {{ reg.default }};
 {%- endfor %}
     end
 {%- endif %}
@@ -61,7 +47,6 @@ module {{ module.name }} (
 {%- for group in always_groups %}
 
     // ---------- {{ group.label }} ----------
-    // Generated for: {{ group.regs | map(attribute='name') | join(', ') }}
     always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
         if (!rst_n) begin
 {%- for reg in group.regs %}
@@ -73,21 +58,5 @@ module {{ module.name }} (
     end
 {%- endfor %}
 {%- endif %}
-
-    // =================================================
-    // TODO: Implement {{ module.name }} logic
-    //
-    // Parameters: {{ param_names or '(none)' }}
-    // Primary clock: {{ module.primary_clock() or '(none)' }}
-    //
-    // Reset signals per clock domain (wrapper uses `rst_n` in always blocks):
-{{ reset_map }}
-    //   → Replace `rst_n` with the actual reset port name for each domain.
-    //
-    // Registers and reset behavior:
-{%- for port in module.regs() %}
-    //   {{ port.name }} : {{ port.reset_type.value }} reset{% if port.default %} to {{ port.default }}{% endif %}{% if port.signed %}  (signed){% endif %}
-{%- endfor %}
-    // =================================================
 
 endmodule

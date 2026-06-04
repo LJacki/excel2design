@@ -92,25 +92,23 @@ def _detect_reset_per_clock(module: Module) -> str:
 # ---- Column-aligned port/parameter formatting --------------------------------
 
 def _fmt_params(params) -> list[str]:
-    """Return aligned parameter declaration lines."""
+    """Return aligned parameter declaration lines. Trailing comma on all lines."""
     if not params:
         return []
     max_name = max(len(p.name) for p in params)
     lines = []
-    for i, p in enumerate(params):
-        suffix = "," if i < len(params) - 1 else ""
+    for p in params:
         if p.width:
-            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {p.value}{suffix}")
+            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {p.value},")
         else:
-            lines.append(f"    parameter {p.name:<{max_name}} = {p.value}{suffix}")
+            lines.append(f"    parameter {p.name:<{max_name}} = {p.value},")
     return lines
 
 
-def _fmt_ports(ports: list[Port], has_more: bool = False) -> list[str]:
-    """Return column-aligned port declaration lines.
+def _fmt_ports(ports: list[Port]) -> list[str]:
+    """Return column-aligned port declaration lines. Trailing comma on all lines.
 
     Columns: direction(7) signed(7) type(5) width(w) name
-    has_more: True if more port groups follow (outputs after inputs, etc.)
     """
     if not ports:
         return []
@@ -118,16 +116,14 @@ def _fmt_ports(ports: list[Port], has_more: bool = False) -> list[str]:
     max_width = max(len(w) for w in width_strs) if width_strs else 0
 
     lines = []
-    for i, p in enumerate(ports):
-        w = width_strs[i]
-        is_last_in_group = (i == len(ports) - 1)
-        suffix = "," if not is_last_in_group or has_more else ""
+    for p in ports:
+        w = p.width.to_verilog()
         direction = f"{p.direction.value:<7}"
         signed = f"{'signed':<7}" if p.signed else " " * 7
         typ = f"{p.type.value:<5}"
         width_col = f"{w:<{max_width}}" if w else " " * max_width
         comment = f"  // {p.comment}" if p.comment else ""
-        lines.append(f"    {direction}{signed}{typ}{width_col} {p.name}{suffix}{comment}")
+        lines.append(f"    {direction}{signed}{typ}{width_col} {p.name},{comment}")
     return lines
 
 
@@ -162,13 +158,9 @@ def generate_wrapper(
         source_file=str(source_file) if source_file else "",
         source_sheet=source_sheet or module.source_sheet or "",
         param_lines=_fmt_params(module.parameters),
-        input_lines=_fmt_ports(input_ports, has_more=bool(output_ports or inout_ports)),
-        output_lines=_fmt_ports(output_ports, has_more=bool(inout_ports)),
+        input_lines=_fmt_ports(input_ports),
+        output_lines=_fmt_ports(output_ports),
         inout_lines=_fmt_ports(inout_ports),
-        param_names=", ".join(p.name for p in module.parameters),
-        internal_wires=internal_wires,
-        internal_regs=internal_regs,
         regs_with_default=regs_with_default,
         always_groups=always_groups,
-        reset_map=_detect_reset_per_clock(module),
     )
