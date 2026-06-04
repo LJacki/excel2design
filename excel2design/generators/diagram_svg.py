@@ -19,9 +19,9 @@ ARROW_LENGTH = 28
 ROW_HEIGHT = 24
 SIDE_PAD = 20
 TOP_HEADER = 34
-BODY_PAD_TOP = 14
-BODY_PAD_BOTTOM = 14
-PARAM_LINE_H = 14     # height per parameter text line
+BODY_PAD_TOP = 10
+BODY_PAD_BOTTOM = 10
+PARAM_LINE_H = 12     # height for compact parameter line
 INOUT_STRIP = 32
 MIN_CANVAS_W = 400
 MIN_CANVAS_H = 180
@@ -74,8 +74,8 @@ class _Layout:
         param_rows = len(module.parameters)
         body_h = BODY_PAD_TOP + n_rows * ROW_HEIGHT + BODY_PAD_BOTTOM
         if param_rows > 0:
-            body_h += param_rows * PARAM_LINE_H + 6
-        self.param_rows = param_rows
+            body_h += PARAM_LINE_H
+        self.has_params = param_rows > 0
 
         inout_strip_h = INOUT_STRIP if self.inouts else 0
 
@@ -96,7 +96,7 @@ class _Layout:
         self.right_x = self.body_x + self.body_w
         self.row_top = self.body_y + BODY_PAD_TOP + ROW_HEIGHT // 2
         if param_rows > 0:
-            self.row_top += param_rows * PARAM_LINE_H + 6
+            self.row_top += PARAM_LINE_H
         self.param_y = self.body_y + BODY_PAD_TOP
 
 
@@ -198,19 +198,18 @@ def generate_svg(module: Module) -> str:
         "fill": COLOR_BG, "stroke": COLOR_STROKE, "stroke-width": "1.5",
     })
 
-    # Parameters — one line per parameter inside the box
+    # Parameters — compact single line at top-left inside box
     if module.parameters:
-        for i, p in enumerate(module.parameters):
-            py = layout.param_y + i * PARAM_LINE_H
-            pt = ET.SubElement(svg, "text", {
-                "x": str(layout.body_x + 12),
-                "y": str(py + 10),
-                "font-family": FONT_FAMILY,
-                "font-size": "10",
-                "fill": COLOR_MUTED,
-                "font-style": "italic",
-            })
-            pt.text = f"{p.name}={p.value}"
+        param_line = ", ".join(f"{p.name}={p.value}" for p in module.parameters)
+        pt = ET.SubElement(svg, "text", {
+            "x": str(layout.body_x + 8),
+            "y": str(layout.body_y + BODY_PAD_TOP + 8),
+            "font-family": FONT_FAMILY,
+            "font-size": "9",
+            "fill": COLOR_MUTED,
+            "font-style": "italic",
+        })
+        pt.text = param_line
 
     # Input ports
     for i, p in enumerate(layout.inputs):
