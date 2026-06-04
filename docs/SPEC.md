@@ -474,7 +474,7 @@ rx_pad ─→│                                  │──→ fifo_full      re
 3. **带标签箭头**：`element.type: "arrow"`，信号名写在 `arrow.text` 字段，一个元素同时承载方向+文字
 
 **字体选择（v0.4 起）**：
-- `fontFamily: 5` = Helvetica / "Normal"（非手写，清晰可读）
+- `fontFamily: 4` = Comic Shanns（干净的手写字体，替代 Virgil）
 - 旧版 `fontFamily: 1` = Virgil（手写草稿体）→ **废弃**
 
 **布局规则**：

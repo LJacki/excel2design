@@ -5,7 +5,7 @@ Renders a Module as an Excalidraw scene JSON object using plain dicts
 seeds, integer coordinates, LF line endings, no trailing whitespace.
 
 v0.4 changes:
-  * fontFamily: 5 (Helvetica / "Normal") — replaces fontFamily 1 (Virgil)
+  * fontFamily: 4 (Comic Shanns) — clean handwriting, replaces Virgil (1)
   * Text elements bound to arrow elements via containerId — text always
     visible and follows arrow when moved in Excalidraw.
   * Uniform arrow lengths within each direction group (all inputs same
@@ -41,7 +41,7 @@ UNIFORM_PAD = 50       # extra arrow length beyond text width (~4 chars)
 # Font settings (Helvetica / Normal — clean, not hand-drawn)
 FONT_SIZE = 20
 NAME_FONT_SIZE = 24
-FONT_FAMILY = 5        # 5 = Helvetica / Normal
+FONT_FAMILY = 4        # 4 = Comic Shanns (clean handwriting, replaces Virgil)
 
 # Colors
 COLOR_ARROW_IN = "#2E86C1"

@@ -128,7 +128,7 @@ def test_font_family_is_helvetica(uart_rx: Module) -> None:
     scene = json.loads(generate_excalidraw(uart_rx))
     for e in scene["elements"]:
         if "fontFamily" in e:
-            assert e["fontFamily"] == 5, f"Expected fontFamily=5, got {e['fontFamily']} for {e['id']}"
+            assert e["fontFamily"] == 4, f"Expected fontFamily=4 (Comic Shanns), got {e['fontFamily']} for {e['id']}"
 
 
 def test_arrow_elements_present(uart_rx: Module) -> None:
