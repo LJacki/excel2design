@@ -470,8 +470,8 @@ rx_pad ─→│                                  │──→ fifo_full      re
 
 **核心元素**：
 1. 模块矩形：`element.type: "rectangle"`, `roughness: 1`, `strokeStyle: "solid"`
-2. 端口文本：`element.type: "text"`, `fontFamily: 5` (Helvetica / "Normal"), `fontSize: 20`
-3. **方向箭头**：`element.type: "arrow"`, 连接文本到矩形边缘
+2. 模块名：`element.type: "text"`, `fontFamily: 5`, 矩形上方居中
+3. **带标签箭头**：`element.type: "arrow"`，信号名写在 `arrow.text` 字段，一个元素同时承载方向+文字
 
 **字体选择（v0.4 起）**：
 - `fontFamily: 5` = Helvetica / "Normal"（非手写，清晰可读）
@@ -479,24 +479,25 @@ rx_pad ─→│                                  │──→ fifo_full      re
 
 **布局规则**：
 ```
-  clk_a ←──┐                    ┌──→ data_a[WIDTH-1:0]
- rst_a_n ←─┤   ┌──────────┐    ├──→ valid_a
-   clk_b ←─┤   │multi_clock│    ├──→ data_b[WIDTH-1:0]
- rst_b_n ←─┤   │           │    ├──→ flag_c
-   clk_c ←─┤   │  WIDTH=16 │    ├──→ bridge_out[WIDTH-1:0]
-bridge_in ←─┘   └──────────┘    └──→
+  ←── clk_a ──┐                    ┌── data_a[WIDTH-1:0] ──→
+  ←─ rst_a_n ─┤   ┌──────────┐    ├─── valid_a ──→
+  ←── clk_b ──┤   │multi_clock│    ├── data_b[WIDTH-1:0] ──→
+  ←─ rst_b_n ─┤   │           │    ├─── flag_c ──→
+  ←── clk_c ──┤   │  WIDTH=16 │    ├ bridge_out[WIDTH-1:0] ─→
+  ← bridge_in ┘   └──────────┘    └──
 ```
 
-- **箭头方向**：input 箭头从文本指向矩形（←─），output 箭头从矩形指向文本（─→）
-- **箭头属性**：`strokeColor` 按方向（input `#2E86C1`，output `#E74C3C`），`strokeWidth: 2`
-- **文本宽度动态计算**：
-  - `text.width = max(len(label) * 13, 80)` — 每字符 ~13px（fontSize=20, Helvetica 平均）
-  - `text.height = 25`
+- **箭头方向**：input 箭头从左指向模块左边缘（→），output 箭头从模块右边缘指向右（→）
+- **箭头属性**：`strokeColor` 按方向（input `#2E86C1`，output `#E74C3C`，inout `#9B59B6`），`strokeWidth: 2`
+- **箭头文字**：`arrow.text` = 端口标签（`{name}[{width}]`），沿箭头中点渲染，自然对齐
+- **箭头长度动态计算**：
+  - `length = max(len(label) * 13 + 30, 100)` — 每字符 ~13px + 30px 余量（fontSize=20, Helvetica）
+  - `height = 30` — 足够容纳 fontSize=20 的文字
 - **矩形大小动态计算**：
-  - `RECT_W = max(300, longest_label_width + 200)`
-  - `RECT_H = max(200, max(inputs, outputs) * ROW_SPACING + 80)`
-- 端口行间距：`ROW_SPACING = 30`
-- 整体位置：模块左上角 `(250, 200)`，超出右边缘自动扩展 canvas
+  - `RECT_X = max_input_arrow_len + gap + pad`（为左侧箭头留空间）
+  - `RECT_W = max(250, pad * 2)`
+  - `RECT_H = max(180, max(inputs, outputs) * ROW_SPACING + 80)`
+- 端口行间距：`ROW_SPACING = 32`
 - 固定 seed：元素 ID 派生的整数值（非 random），保证字节稳定
 
 ---
