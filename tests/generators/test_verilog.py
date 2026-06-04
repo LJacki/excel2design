@@ -59,7 +59,7 @@ def test_parameter_declaration() -> None:
 def test_input_ports_in_excel_order() -> None:
     m = load("uart_rx")
     v = generate_wrapper(m)
-    assert v.index("clk,") < v.index("rst_n,") < v.index("rx_pad,") < v.index("baud_tick,")
+    assert v.index("clk") < v.index("rst_n") < v.index("rx_pad") < v.index("baud_tick")
 
 
 def test_output_ports_in_excel_order() -> None:
@@ -90,13 +90,13 @@ def test_one_bit_width_omits_brackets() -> None:
     v = generate_wrapper(m)
     # 1-bit ports: clk, rst_n, rx_pad, baud_tick, rx_valid, fifo_full
     # They should NOT have [N:0] in their declarations
-    for one_bit_port in ("clk,", "rst_n,", "rx_valid,", "fifo_full,"):
+    for one_bit_port in ("clk", "rst_n", "rx_valid", "fifo_full"):
         # Find the port line and check there's no [N:0] before the port name
-        # Simple: search for the literal one-bit port, ensure it's not preceded by [..:0]
         idx = v.find(one_bit_port)
-        assert idx > 0
+        assert idx > 0, f"port {one_bit_port} not found"
         line_start = v.rfind("\n", 0, idx) + 1
-        line = v[line_start:idx]
+        line_end = v.find(",", idx)
+        line = v[line_start:line_end]
         assert "[" not in line, f"1-bit port {one_bit_port} should not have brackets: {line!r}"
 
 

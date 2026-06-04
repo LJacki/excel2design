@@ -92,23 +92,27 @@ def _detect_reset_per_clock(module: Module) -> str:
 # ---- Column-aligned port/parameter formatting --------------------------------
 
 def _fmt_params(params) -> list[str]:
-    """Return aligned parameter declaration lines. Trailing comma on all lines."""
+    """Return aligned parameter declaration lines.
+
+    Columns: name(padded to max) = value(padded to max), comma
+    """
     if not params:
         return []
     max_name = max(len(p.name) for p in params)
+    max_val = max(len(str(p.value)) for p in params)
     lines = []
     for p in params:
         if p.width:
-            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {p.value},")
+            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {str(p.value):<{max_val}},")
         else:
-            lines.append(f"    parameter {p.name:<{max_name}} = {p.value},")
+            lines.append(f"    parameter {p.name:<{max_name}} = {str(p.value):<{max_val}},")
     return lines
 
 
-def _fmt_ports(ports: list[Port]) -> list[str]:
-    """Return column-aligned port declaration lines. Trailing comma on all lines.
+def _fmt_ports(ports: list[Port], max_name: int) -> list[str]:
+    """Return column-aligned port declaration lines.
 
-    Columns: direction(7) signed(7) type(5) width(w) name
+    Columns: direction(7) signed(7) type(5) width(w) name({max_name}) ,comment
     """
     if not ports:
         return []
@@ -123,7 +127,7 @@ def _fmt_ports(ports: list[Port]) -> list[str]:
         typ = f"{p.type.value:<5}"
         width_col = f"{w:<{max_width}}" if w else " " * max_width
         comment = f"  // {p.comment}" if p.comment else ""
-        lines.append(f"    {direction}{signed}{typ}{width_col} {p.name},{comment}")
+        lines.append(f"    {direction}{signed}{typ}{width_col} {p.name:<{max_name}},{comment}")
     return lines
 
 
@@ -148,19 +152,19 @@ def generate_wrapper(
     input_ports = module.inputs()
     output_ports = module.outputs()
     inout_ports = module.inouts()
+    all_ports = input_ports + output_ports + inout_ports
+    max_name = max((len(p.name) for p in all_ports), default=0)
     regs_with_default = [p for p in module.regs() if p.default]
     always_groups = _group_regs_by_always(regs_with_default)
-    internal_wires = [p for p in module.wires() if p.direction.value != "input"]
-    internal_regs = [p for p in module.regs() if p.default]
 
     return template.render(
         module=module,
         source_file=str(source_file) if source_file else "",
         source_sheet=source_sheet or module.source_sheet or "",
         param_lines=_fmt_params(module.parameters),
-        input_lines=_fmt_ports(input_ports),
-        output_lines=_fmt_ports(output_ports),
-        inout_lines=_fmt_ports(inout_ports),
+        input_lines=_fmt_ports(input_ports, max_name),
+        output_lines=_fmt_ports(output_ports, max_name),
+        inout_lines=_fmt_ports(inout_ports, max_name),
         regs_with_default=regs_with_default,
         always_groups=always_groups,
     )
