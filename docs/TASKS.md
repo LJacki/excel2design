@@ -5,6 +5,18 @@
 
 ---
 
+## v0.3.4 — 框图 v0.4 + Verilog 列对齐（2026-06-04）
+
+| ID | 任务 | 状态 | commit |
+|---|---|---|---|
+| 0.4.1 | 三种框图方向箭头（HTML/SVG/Excalidraw） | ✅ | 357cea0 |
+| 0.4.2 | Excalidraw 文本宽度 + 字体（Comic Shanns） | ✅ | 08b6ba0, 3dd2310 |
+| 0.4.3 | Excalidraw 箭头统一等长 + containerId 绑定 | ✅ | 67ab363, b3cb6d4 |
+| 0.4.4 | 时钟域颜色系统（蓝/绿系列） | ✅ | 5e30ea6, e6a2698 |
+| 0.4.5 | 亮色 palette 调整 + SVG 参数优化 | ✅ | 16ee3b2, 39938c9 |
+| 0.4.6 | Verilog 列对齐（param + port 六列） | ✅ | 38a6443, 72ca7a9, ef147a8 |
+| 0.4.7 | 测试更新：225 passed | ✅ | — |
+
 ## Phase 0 — 项目骨架（0.5d）
 
 | ID | 任务 | 状态 | 完成时间 | commit |
