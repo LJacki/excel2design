@@ -490,7 +490,7 @@ bridge_in ←─┘   └──────────┘    └──→
 - **箭头方向**：input 箭头从文本指向矩形（←─），output 箭头从矩形指向文本（─→）
 - **箭头属性**：`strokeColor` 按方向（input `#2E86C1`，output `#E74C3C`），`strokeWidth: 2`
 - **文本宽度动态计算**：
-  - `text.width = max(len(label) * 9, 60)` — 每字符 ~9px（fontSize=20, Helvetica 平均）
+  - `text.width = max(len(label) * 13, 80)` — 每字符 ~13px（fontSize=20, Helvetica 平均）
   - `text.height = 25`
 - **矩形大小动态计算**：
   - `RECT_W = max(300, longest_label_width + 200)`

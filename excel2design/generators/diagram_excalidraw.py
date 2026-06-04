@@ -63,8 +63,8 @@ def _port_label(p: Port) -> str:
 
 
 def _text_width(label: str) -> int:
-    """Estimate text element width: ~9px per char at fontSize=20, min 60px."""
-    return max(len(label) * 9, 60)
+    """Estimate text element width: ~13px per char at fontSize=20, min 80px."""
+    return max(len(label) * 13, 80)
 
 
 # ---- Excalidraw element builders -------------------------------------------
