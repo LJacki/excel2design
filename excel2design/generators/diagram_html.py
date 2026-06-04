@@ -72,7 +72,7 @@ class PortView:
             clock=p.clock,
             signed=p.signed,
             comment=p.comment,
-            arrow_color=clock_color(p.clock),
+            arrow_color=clock_color(p.clock, is_input=p.direction.value == "input"),
         )
 
 

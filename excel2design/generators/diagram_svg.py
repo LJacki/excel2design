@@ -71,10 +71,11 @@ class _Layout:
                      MIN_CANVAS_W - LABEL_GAP * 4, 200)
 
         n_rows = max(len(self.inputs), len(self.outputs), 1)
-        param_rows = len(module.parameters)  # one line per parameter inside the box
+        param_rows = len(module.parameters)
         body_h = BODY_PAD_TOP + n_rows * ROW_HEIGHT + BODY_PAD_BOTTOM
         if param_rows > 0:
-            body_h += param_rows * PARAM_LINE_H + 10
+            body_h += param_rows * PARAM_LINE_H + 6
+        self.param_rows = param_rows
 
         inout_strip_h = INOUT_STRIP if self.inouts else 0
 
@@ -94,53 +95,59 @@ class _Layout:
         self.left_x = self.body_x
         self.right_x = self.body_x + self.body_w
         self.row_top = self.body_y + BODY_PAD_TOP + ROW_HEIGHT // 2
-        self.param_y = self.body_y + BODY_PAD_TOP + n_rows * ROW_HEIGHT + BODY_PAD_BOTTOM - 2
+        if param_rows > 0:
+            self.row_top += param_rows * PARAM_LINE_H + 6
+        self.param_y = self.body_y + BODY_PAD_TOP
 
 
 # ---- Markers (per clock domain) -------------------------------------------
 
 def _add_markers(svg: ET.Element, module: Module) -> None:
-    """Add <defs><marker> arrowheads — one per unique clock domain."""
+    """Add <defs><marker> — input+output marker per clock domain."""
     clocks = set()
     for p in module.ports:
         if p.clock:
             clocks.add(p.clock)
     defs = ET.SubElement(svg, "defs")
     for ck in sorted(clocks):
-        color = clock_color(ck)
-        mid = f"m_{hash(ck) & 0x7FFFFFFF}"
-        marker = ET.SubElement(defs, "marker", {
-            "id": mid,
+        for is_in, color in [(True, clock_color(ck, is_input=True)),
+                               (False, clock_color(ck, is_input=False))]:
+            sufx = "i" if is_in else "o"
+            mid = f"m_{hash(ck) & 0x7FFFFFFF}_{sufx}"
+            marker = ET.SubElement(defs, "marker", {
+                "id": mid,
+                "markerWidth": "8", "markerHeight": "6",
+                "refX": "8", "refY": "3", "orient": "auto",
+            })
+            ET.SubElement(marker, "path", {
+                "d": "M 0,0 L 8,3 L 0,6 Z",
+                "fill": color,
+            })
+    # Neutral marker
+    for sufx, color in [("i", "#888888"), ("o", "#888888")]:
+        nmid = f"m_neutral_{sufx}"
+        nmarker = ET.SubElement(defs, "marker", {
+            "id": nmid,
             "markerWidth": "8", "markerHeight": "6",
             "refX": "8", "refY": "3", "orient": "auto",
         })
-        ET.SubElement(marker, "path", {
+        ET.SubElement(nmarker, "path", {
             "d": "M 0,0 L 8,3 L 0,6 Z",
             "fill": color,
         })
-    # Also add neutral marker for ports without clock
-    nmid = "m_neutral"
-    nmarker = ET.SubElement(defs, "marker", {
-        "id": nmid,
-        "markerWidth": "8", "markerHeight": "6",
-        "refX": "8", "refY": "3", "orient": "auto",
-    })
-    ET.SubElement(nmarker, "path", {
-        "d": "M 0,0 L 8,3 L 0,6 Z",
-        "fill": "#888888",
-    })
 
 
-def _marker_id(ck: str | None) -> str:
+def _marker_id(ck: str | None, is_input: bool) -> str:
+    sufx = "i" if is_input else "o"
     if ck:
-        return f"m_{hash(ck) & 0x7FFFFFFF}"
-    return "m_neutral"
+        return f"m_{hash(ck) & 0x7FFFFFFF}_{sufx}"
+    return f"m_neutral_{sufx}"
 
 
 def _port_row(parent, *, y, label_text, label_x, label_anchor,
-              arrow_x1, arrow_x2, clock_val):
-    color = clock_color(clock_val) if clock_val else "#888888"
-    mid = _marker_id(clock_val)
+              arrow_x1, arrow_x2, clock_val, is_input):
+    color = clock_color(clock_val, is_input=is_input)
+    mid = _marker_id(clock_val, is_input)
     t = ET.SubElement(parent, "text", {
         "x": str(label_x), "y": str(y + 4),
         "font-family": FONT_FAMILY, "font-size": str(FONT_SIZE),
@@ -213,7 +220,8 @@ def generate_svg(module: Module) -> str:
         ax1 = layout.left_x - ARROW_LENGTH
         ax2 = layout.left_x
         _port_row(svg, y=y, label_text=label, label_x=label_x,
-                  label_anchor="end", arrow_x1=ax1, arrow_x2=ax2, clock_val=p.clock)
+                  label_anchor="end", arrow_x1=ax1, arrow_x2=ax2,
+                  clock_val=p.clock, is_input=True)
 
     # Output ports
     for i, p in enumerate(layout.outputs):
@@ -223,7 +231,8 @@ def generate_svg(module: Module) -> str:
         ax1 = layout.right_x
         ax2 = layout.right_x + ARROW_LENGTH
         _port_row(svg, y=y, label_text=label, label_x=label_x,
-                  label_anchor="start", arrow_x1=ax1, arrow_x2=ax2, clock_val=p.clock)
+                  label_anchor="start", arrow_x1=ax1, arrow_x2=ax2,
+                  clock_val=p.clock, is_input=False)
 
     # Inout ports
     if layout.inouts:
