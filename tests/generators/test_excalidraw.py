@@ -88,12 +88,10 @@ def test_rectangle_present(uart_rx: Module) -> None:
     scene = json.loads(generate_excalidraw(uart_rx))
     rects = [e for e in scene["elements"] if e["type"] == "rectangle"]
     assert len(rects) >= 1, "expected at least one rectangle element"
-    # The module rect must carry the hand-drawn Excalidraw look.
     rect = rects[0]
     assert rect["roughness"] == 1
     assert rect["strokeStyle"] == "solid"
     assert rect["fillStyle"] == "hachure"
-    # All required Excalidraw fields are present.
     for field in (
         "id", "x", "y", "width", "height", "seed",
         "strokeWidth", "opacity", "angle", "groupIds",
@@ -102,15 +100,21 @@ def test_rectangle_present(uart_rx: Module) -> None:
         assert field in rect, f"rectangle missing required field: {field!r}"
 
 
-def test_text_elements_count(uart_rx: Module) -> None:
-    """text-element count = #ports + 1 (module name)."""
+def test_port_arrow_labels(uart_rx: Module) -> None:
+    """v0.4: port labels are on arrow elements (arrow.text), not separate text elements."""
     scene = json.loads(generate_excalidraw(uart_rx))
+    arrows = [e for e in scene["elements"] if e["type"] == "arrow"]
     texts = [e for e in scene["elements"] if e["type"] == "text"]
-    n_ports = len(uart_rx.ports)
-    assert len(texts) == n_ports + 1, (
-        f"expected {n_ports + 1} text elements (ports + module name), "
-        f"got {len(texts)}"
-    )
+    # Only the module name is a separate text element
+    assert len(texts) == 1, f"expected 1 text (module name only), got {len(texts)}"
+    # Arrow count = #ports (no inouts in uart_rx)
+    assert len(arrows) == len(uart_rx.ports)
+    # Every arrow carries a text label
+    for a in arrows:
+        assert "text" in a
+        assert a["text"] in ["clk", "rst_n", "rx_pad", "baud_tick",
+                               "rx_data[DATA_WIDTH-1:0]", "rx_valid",
+                               "fifo_full", "fifo_data[DATA_WIDTH-1:0]"]
 
 
 def test_byte_stable_on_repeat(uart_rx: Module) -> None:
@@ -127,31 +131,29 @@ def test_byte_stable_on_repeat(uart_rx: Module) -> None:
 def test_empty_ports_renders(empty_ports: Module) -> None:
     """Zero-port module must not crash and must still produce valid Excalidraw."""
     out = generate_excalidraw(empty_ports)
-    scene = json.loads(out)  # must not raise
+    scene = json.loads(out)
     assert scene["type"] == "excalidraw"
-    # Module name should still appear (text-name element).
     assert "empty_ports" in out
-    # We must still have the module rectangle and the module-name text.
     rects = [e for e in scene["elements"] if e["type"] == "rectangle"]
     texts = [e for e in scene["elements"] if e["type"] == "text"]
     assert len(rects) == 1
-    assert len(texts) == 1  # the module-name text only — no ports
+    assert len(texts) == 1  # module name only
 
 
 def test_font_family_is_helvetica(uart_rx: Module) -> None:
-    """v0.4: fontFamily must be 5 (Helvetica/Normal), not 1 (Virgil)."""
+    """v0.4: fontFamily must be 5 (Helvetica/Normal) on arrows and text."""
     scene = json.loads(generate_excalidraw(uart_rx))
-    texts = [e for e in scene["elements"] if e["type"] == "text"]
-    for t in texts:
-        assert t["fontFamily"] == 5, f"Expected fontFamily=5, got {t['fontFamily']}"
+    for e in scene["elements"]:
+        if "fontFamily" in e:
+            assert e["fontFamily"] == 5, f"Expected fontFamily=5, got {e['fontFamily']} for {e['id']}"
 
 
 def test_arrow_elements_present(uart_rx: Module) -> None:
-    """v0.4: directional arrow elements must connect ports to module rectangle."""
+    """v0.4: every port is an arrow element with text label and arrowhead."""
     scene = json.loads(generate_excalidraw(uart_rx))
     arrows = [e for e in scene["elements"] if e["type"] == "arrow"]
     assert len(arrows) > 0, "Expected at least one arrow element"
     for a in arrows:
-        assert "points" in a
-        assert "strokeColor" in a
-        assert a.get("endArrowhead") == "arrow" or a.get("startArrowhead") == "arrow"
+        assert "text" in a, f"arrow {a['id']} missing text label"
+        assert a.get("endArrowhead") == "arrow"
+        assert a["fontFamily"] == 5

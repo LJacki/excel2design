@@ -6,10 +6,11 @@ seeds, integer coordinates, LF line endings, no trailing whitespace.
 
 v0.4 changes:
   * fontFamily: 5 (Helvetica / "Normal") — replaces fontFamily 1 (Virgil)
-  * Dynamic text width based on label string length (est. 9px/char)
-  * Directional arrow elements connecting port texts to module rectangle
-  * Dynamic rectangle sizing based on port count and label widths
-  * Arrow colors: input #2E86C1, output #E74C3C
+  * Port labels rendered on arrow elements (arrow.text field) — single
+    element per port, no separate text+arrow, natural alignment
+  * Arrow length dynamically sized to fit label text
+  * Dynamic rectangle sizing based on port count
+  * Arrow colors: input #2E86C1, output #E74C3C, inout #9B59B6
 
 Public API:
     generate_excalidraw(module) -> str
@@ -24,25 +25,20 @@ from excel2design.core.models import Module, Port
 
 # ---- Layout constants (all integer px) --------------------------------------
 
-# Base module rectangle position (upper-left corner)
-RECT_X = 250
 RECT_Y = 200
-RECT_W = 300          # min width, may grow for long labels
-RECT_H = 200          # min height, grows with port count
-
-# Per-element dimensions
-PORT_TEXT_H = 25       # height of a port-label text element
-ARROW_LENGTH = 36      # length of directional arrow elements
+RECT_MIN_W = 250
+RECT_MIN_H = 180
 NAME_TEXT_W = 200
 NAME_TEXT_H = 28
-ROW_SPACING = 30       # vertical spacing between ports
-INOUT_SPACING = 90     # horizontal spacing for inout ports along the bottom
-INOUT_GAP = 36         # distance from rect bottom to inout text
+ROW_SPACING = 32       # vertical spacing between port rows
+ARROW_HEIGHT = 30      # arrow element height (room for text)
+GAP = 10               # gap between arrow edge and module edge
+RECT_PAD = 40          # padding from canvas edge
 
 # Font settings (Helvetica / Normal — clean, not hand-drawn)
 FONT_SIZE = 20
 NAME_FONT_SIZE = 24
-FONT_FAMILY = 5        # 5 = Helvetica / Normal (1 = Virgil / hand-drawn, deprecated)
+FONT_FAMILY = 5        # 5 = Helvetica / Normal
 
 # Colors
 COLOR_ARROW_IN = "#2E86C1"
@@ -62,9 +58,9 @@ def _port_label(p: Port) -> str:
     return f"{p.name}[{p.width.msb}:0]"
 
 
-def _text_width(label: str) -> int:
-    """Estimate text element width: ~13px per char at fontSize=20, min 80px."""
-    return max(len(label) * 13, 80)
+def _arrow_len(label: str) -> int:
+    """Arrow length must accommodate the label text at ~13px/char + padding."""
+    return max(len(label) * 13 + 30, 100)
 
 
 # ---- Excalidraw element builders -------------------------------------------
@@ -116,19 +112,17 @@ def _rectangle(eid: str, x: int, y: int, w: int, h: int, seed: int) -> dict:
     )
 
 
-def _text(eid: str, text: str, x: int, y: int, seed: int,
-          font_size: int = FONT_SIZE) -> dict:
-    w = _text_width(text)
+def _name_text(eid: str, text: str, x: int, y: int, seed: int) -> dict:
     el = _base_element(
         eid=eid, etype="text",
-        x=x, y=y, width=w, height=PORT_TEXT_H,
+        x=x, y=y, width=NAME_TEXT_W, height=NAME_TEXT_H,
         seed=seed, stroke_width=1, roughness=0,
     )
     el.update({
-        "fontSize": int(font_size),
+        "fontSize": NAME_FONT_SIZE,
         "fontFamily": FONT_FAMILY,
         "text": text,
-        "textAlign": "left",
+        "textAlign": "center",
         "verticalAlign": "top",
         "containerId": None,
         "originalText": text,
@@ -137,59 +131,38 @@ def _text(eid: str, text: str, x: int, y: int, seed: int,
     return el
 
 
-def _arrow(
+def _arrow_with_label(
     eid: str,
+    label: str,
     x: int, y: int,
     length: int,
     seed: int,
     stroke_color: str,
-    direction: str,  # "right" or "left"
 ) -> dict:
-    """Create an arrow element.
+    """Create an arrow element with the port label as its text.
 
-    For direction="right": arrow points rightward (→), used for both
-      input arrows (text→module) and output arrows (module→text).
-      The arrow element is placed at the start point, length determines
-      where the arrowhead appears.
-    For direction="left": arrow points leftward.
+    Arrow points rightward (→). The text is rendered along the arrow at
+    its midpoint.  Input ports are placed left of the module (arrowhead
+    points into module edge), output ports right of the module (arrowhead
+    points away).
     """
     el = _base_element(
         eid=eid, etype="arrow",
-        x=x, y=y, width=length, height=1,
+        x=x, y=y, width=length, height=ARROW_HEIGHT,
         seed=seed, stroke_width=2, roughness=0,
     )
-    if direction == "right":
-        el["points"] = [[0, 0], [length, 0]]
-        el["startArrowhead"] = None
-        el["endArrowhead"] = "arrow"
-    else:
-        el["points"] = [[length, 0], [0, 0]]
-        el["startArrowhead"] = "arrow"
-        el["endArrowhead"] = None
+    el["points"] = [[0, ARROW_HEIGHT // 2], [length, ARROW_HEIGHT // 2]]
+    el["startArrowhead"] = None
+    el["endArrowhead"] = "arrow"
     el["strokeColor"] = stroke_color
+    el["text"] = label
+    el["originalText"] = label
+    el["fontSize"] = FONT_SIZE
+    el["fontFamily"] = FONT_FAMILY
+    el["roundness"] = {"type": 2}
     el["startBinding"] = None
     el["endBinding"] = None
-    el["roundness"] = {"type": 2}
     return el
-
-
-# ---- Layout helpers ---------------------------------------------------------
-
-def _compute_rect_size(inputs: list[Port], outputs: list[Port]) -> tuple[int, int]:
-    """Compute module rectangle W×H based on port count and label lengths."""
-    n_rows = max(len(inputs), len(outputs), 1)
-    h = max(RECT_H, n_rows * ROW_SPACING + 80)
-
-    # Calculate max label widths
-    max_in_len = max((len(_port_label(p)) for p in inputs), default=0)
-    max_out_len = max((len(_port_label(p)) for p in outputs), default=0)
-
-    # Width: module name width + port label widths
-    min_w = RECT_W
-    in_zone = _text_width("X" * max_in_len) + ARROW_LENGTH + 12
-    out_zone = _text_width("X" * max_out_len) + ARROW_LENGTH + 12
-    w = max(min_w, in_zone + out_zone + 60)
-    return w, h
 
 
 # ---- Public API -------------------------------------------------------------
@@ -204,93 +177,88 @@ def generate_excalidraw(module: Module) -> str:
     outputs = module.outputs()
     inouts = module.inouts()
 
-    rect_w, rect_h = _compute_rect_size(inputs, outputs)
+    # Compute arrow lengths
+    in_labels = [_port_label(p) for p in inputs]
+    out_labels = [_port_label(p) for p in outputs]
+    in_lens = [_arrow_len(l) for l in in_labels]
+    out_lens = [_arrow_len(l) for l in out_labels]
+    max_in_len = max(in_lens, default=0)
+    max_out_len = max(out_lens, default=0)
+
+    # Rectangle sizing
+    rect_x = max_in_len + GAP + RECT_PAD
+    rect_w = max(RECT_MIN_W, RECT_PAD * 2)
+    n_rows = max(len(inputs), len(outputs), 1)
+    rect_h = max(RECT_MIN_H, n_rows * ROW_SPACING + 80)
+
+    # Canvas sizing
+    canvas_w = rect_x + rect_w + max_out_len + GAP + RECT_PAD + 20
+    canvas_h = RECT_Y + rect_h + 60
 
     elements: list[dict] = []
 
     # ---- Module rectangle -------------------------------------------------
     elements.append(
-        _rectangle("rect-module", RECT_X, RECT_Y, rect_w, rect_h, seed=100001)
+        _rectangle("rect-module", rect_x, RECT_Y, rect_w, rect_h, seed=100001)
     )
 
     # ---- Module name above the rect ---------------------------------------
-    name_x = RECT_X + (rect_w - NAME_TEXT_W) // 2
+    name_x = rect_x + (rect_w - NAME_TEXT_W) // 2
     name_y = RECT_Y - NAME_TEXT_H - 8
     elements.append(
-        _text("text-name", module.name, name_x, name_y,
-              seed=100002, font_size=NAME_FONT_SIZE)
+        _name_text("text-name", module.name, name_x, name_y, seed=100002)
     )
 
-    # ---- Input ports (left side) ------------------------------------------
-    # Distribute rows vertically centered on the rect
+    # ---- Input ports (left side, arrows point → into module) --------------
     n_in = len(inputs)
-    in_half_span = 0
-    if n_in > 0:
-        in_center_y = RECT_Y + RECT_H // 2
-        in_half_span = (n_in - 1) * ROW_SPACING // 2
-
-    for i, p in enumerate(inputs):
-        label = _port_label(p)
-        text_w = _text_width(label)
-        text_x = RECT_X - ARROW_LENGTH - text_w - 10
-        text_y = RECT_Y + RECT_H // 2 - in_half_span + i * ROW_SPACING - PORT_TEXT_H // 2
-
+    in_half = (n_in - 1) * ROW_SPACING // 2 if n_in > 0 else 0
+    center_y = RECT_Y + rect_h // 2
+    for i, label in enumerate(in_labels):
+        arrow_len = in_lens[i]
+        ax = rect_x - arrow_len - GAP
+        ay = center_y - in_half + i * ROW_SPACING - ARROW_HEIGHT // 2
         elements.append(
-            _text(f"text-in-{i}", label, text_x, text_y, seed=200000 + i)
-        )
-        # Arrow from text right-edge to module left-edge
-        arrow_x = text_x + text_w + 4
-        arrow_y = text_y + PORT_TEXT_H // 2
-        elements.append(
-            _arrow(f"arrow-in-{i}", arrow_x, arrow_y, ARROW_LENGTH,
-                   seed=500000 + i, stroke_color=COLOR_ARROW_IN, direction="right")
+            _arrow_with_label(
+                f"arrow-in-{i}", label,
+                ax, ay, arrow_len,
+                seed=200000 + i, stroke_color=COLOR_ARROW_IN,
+            )
         )
 
-    # ---- Output ports (right side) ----------------------------------------
+    # ---- Output ports (right side, arrows point → out of module) ----------
     n_out = len(outputs)
-    out_half_span = 0
-    if n_out > 0:
-        out_center_y = RECT_Y + RECT_H // 2
-        out_half_span = (n_out - 1) * ROW_SPACING // 2
-
-    for i, p in enumerate(outputs):
-        label = _port_label(p)
-        text_w = _text_width(label)
-        text_x = RECT_X + rect_w + ARROW_LENGTH + 10
-        text_y = RECT_Y + RECT_H // 2 - out_half_span + i * ROW_SPACING - PORT_TEXT_H // 2
-
-        # Arrow from module right-edge to text left-edge
-        arrow_x = RECT_X + rect_w + 4
-        arrow_y = text_y + PORT_TEXT_H // 2
+    out_half = (n_out - 1) * ROW_SPACING // 2 if n_out > 0 else 0
+    for i, label in enumerate(out_labels):
+        arrow_len = out_lens[i]
+        ax = rect_x + rect_w + GAP
+        ay = center_y - out_half + i * ROW_SPACING - ARROW_HEIGHT // 2
         elements.append(
-            _arrow(f"arrow-out-{i}", arrow_x, arrow_y, ARROW_LENGTH,
-                   seed=600000 + i, stroke_color=COLOR_ARROW_OUT, direction="right")
-        )
-        elements.append(
-            _text(f"text-out-{i}", label, text_x, text_y, seed=300000 + i)
+            _arrow_with_label(
+                f"arrow-out-{i}", label,
+                ax, ay, arrow_len,
+                seed=300000 + i, stroke_color=COLOR_ARROW_OUT,
+            )
         )
 
     # ---- Inout ports (bottom row) -----------------------------------------
-    n_inout = len(inouts)
-    if n_inout > 0:
-        base_y = RECT_Y + rect_h + INOUT_GAP
-        for i, p in enumerate(inouts):
-            label = _port_label(p)
-            text_w = _text_width(label)
-            # Center the inout row
-            total_w = max(n_inout * text_w + (n_inout - 1) * 20, 1)
-            start_x = RECT_X + (rect_w - total_w) // 2
-            x = start_x + i * (text_w + 20)
+    if inouts:
+        inout_labels = [_port_label(p) for p in inouts]
+        base_y = RECT_Y + rect_h + 24
+        total_w = sum(_arrow_len(l) + 12 for l in inout_labels) - 12
+        start_x = rect_x + (rect_w - total_w) // 2
+        x = start_x
+        for i, label in enumerate(inout_labels):
+            alen = _arrow_len(label)
             elements.append(
-                _text(f"text-inout-{i}", label, x, base_y, seed=400000 + i)
+                _arrow_with_label(
+                    f"arrow-inout-{i}", label,
+                    x, base_y, alen,
+                    seed=400000 + i, stroke_color=COLOR_ARROW_INOUT,
+                )
             )
-            # Vertical line + diamond for inout
-            cx = x + text_w // 2
-            elements.append(
-                _arrow(f"arrow-inout-{i}", cx - 2, RECT_Y + rect_h + 2, INOUT_GAP - 6,
-                       seed=700000 + i, stroke_color=COLOR_ARROW_INOUT, direction="right")
-            )
+            x += alen + 12
 
+    # ---- Scene ------------------------------------------------------------
     scene = {
         "type": "excalidraw",
         "version": 2,

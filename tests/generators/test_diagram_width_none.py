@@ -102,9 +102,9 @@ def test_excalidraw_handles_blank_width(module_with_blank_width) -> None:
     """P0-3: Excalidraw generator must not AssertionError on width=None."""
     data = json.loads(generate_excalidraw(module_with_blank_width))
     assert data["type"] == "excalidraw"
-    # Find the port label
-    texts = [el for el in data["elements"] if el["type"] == "text"]
-    labels = [el["text"] for el in texts]
+    # v0.4: port labels are on arrow elements
+    arrows = [el for el in data["elements"] if el["type"] == "arrow"]
+    labels = [el["text"] for el in arrows]
     assert "data_blank" in labels
 
 
