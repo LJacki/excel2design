@@ -123,3 +123,13 @@ def test_byte_stable_on_repeat(uart_rx: Module) -> None:
     a = generate_svg(uart_rx)
     b = generate_svg(uart_rx)
     assert a == b
+
+
+def test_has_arrow_markers(uart_rx: Module) -> None:
+    """v0.4: SVG must contain <marker> definitions for directional arrows."""
+    out = generate_svg(uart_rx)
+    assert "<marker" in out
+    assert 'id="arrow_in"' in out
+    assert 'id="arrow_out"' in out
+    assert 'marker-end="url(#arrow_in)"' in out
+    assert 'marker-end="url(#arrow_out)"' in out

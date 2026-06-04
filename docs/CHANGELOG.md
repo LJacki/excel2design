@@ -4,6 +4,41 @@
 
 ---
 
+## v0.3.4 (2026-06-04) — 框图 v0.4 重大升级：方向箭头 + Helvetica 字体 + 模块框
+
+### 为什么升级
+- v0.3 三种框图（HTML/SVG/Excalidraw）反馈不满足数字IC工程师使用需求：
+  - HTML：只有两栏列表，没有模块矩形框，基本不能用
+  - SVG：有端口名但无方向箭头，只有8px短线和4×4 pin
+  - Excalidraw：文本截断（width=100硬编码）、Virgil手写体太乱、无箭头
+
+### SPEC §4 重写
+- §4.2 HTML：新增模块矩形框 CSS 布局、方向箭头（→输入 `#2E86C1`，输出→ `#E74C3C`）
+- §4.3 SVG：新增 `<marker>` arrowhead 定义、方向箭头线
+- §4.4 Excalidraw：fontFamily 1→5 (Virgil→Helvetica)、动态文本宽度、箭头元素
+
+### 生成器升级
+- **HTML** (`diagram_html.j2`)：CSS 模块框布局（`.block` 容器+左右栏），Unicode `→` / `↔` 箭头
+- **SVG** (`diagram_svg.py`)：SVG `<defs><marker>` arrowhead 三角 + `<line marker-end>` 箭头线
+- **Excalidraw** (`diagram_excalidraw.py`)：
+  - `fontFamily: 5`（Helvetica/Normal，替换 Virgil）
+  - `text.width` 动态计算：`max(len(label) * 9, 60)`
+  - 新增 `arrow` 元素：input 蓝色 `#2E86C1`，output 红色 `#E74C3C`
+  - 矩形大小动态计算：根据端口数和标签宽度自适应
+
+### 测试
+- 227 → **231 全过**（+4 新测试）
+  - `test_font_family_is_helvetica` — Excalidraw fontFamily=5
+  - `test_arrow_elements_present` — Excalidraw arrow 元素存在
+  - `test_has_arrow_markers` — SVG marker 定义存在
+  - `test_has_arrow_elements` — HTML arrow CSS + Unicode
+
+### Commit
+- (待 commit)
+
+### Tag
+- `v0.3.4`
+
 ## v0.3.3 (2026-06-03) — DeepSeek V4 Pro 第三轮审查修复
 
 ### 修复

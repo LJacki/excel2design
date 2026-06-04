@@ -249,6 +249,18 @@ def test_doctype_and_html_root(uart_rx: Module) -> None:
     assert "</body>" in out
 
 
+def test_has_arrow_elements(uart_rx: Module) -> None:
+    """v0.4: HTML must contain directional arrow spans with color classes."""
+    out = generate_html(uart_rx)
+    assert "port__arrow--in" in out
+    assert "port__arrow--out" in out
+    # Unicode arrows
+    assert "&#8594;" in out  # → right arrow (input/output)
+    # inout: only for modules with inout ports
+    if "s_axi_awuser" in out:
+        assert "&#8596;" in out  # ↔ bidirectional arrow
+
+
 # ---- HTML validator helper -------------------------------------------------
 
 class HTMLValidator(html.parser.HTMLParser):

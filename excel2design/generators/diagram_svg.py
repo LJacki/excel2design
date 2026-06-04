@@ -1,9 +1,15 @@
-"""SVG block-diagram generator per SPEC §4.3.
+"""SVG block-diagram generator per SPEC §4.3 (v0.4).
 
 Renders a Module as a self-contained, light-themed SVG document using
 xml.etree.ElementTree (no Jinja2). The output is byte-stable: no timestamps,
 no random sources, deterministic port ordering, LF line endings, no trailing
 whitespace, all coordinates are integers.
+
+v0.4 changes:
+  * Directional arrows (SVG <marker> arrowheads) replace the old 8px-ticks
+  * Input arrows: blue, pointing rightward from label to module edge
+  * Output arrows: red, pointing rightward from module edge to label
+  * Colors per SPEC §4.3: input #2E86C1, output #E74C3C, inout #9B59B6
 
 Public API:
     generate_svg(module) -> str
@@ -20,63 +26,54 @@ from excel2design.core.models import Module, Port
 
 FONT_FAMILY = "sans-serif"
 FONT_SIZE = 12
-LABEL_GAP = 6          # gap between port tick and label text
-ROW_HEIGHT = 22        # vertical spacing per port row
-SIDE_PAD = 16          # padding inside module on each side
-TOP_HEADER = 30        # height of the module-name band
-BODY_PAD_TOP = 12
-BODY_PAD_BOTTOM = 12
-INOUT_STRIP = 30       # height of the inout strip below the body
-MIN_CANVAS_W = 360
-MIN_CANVAS_H = 160
+LABEL_GAP = 8          # gap between port label and arrow start
+ARROW_LENGTH = 28       # length of the directional arrow line
+ROW_HEIGHT = 24        # vertical spacing per port row
+SIDE_PAD = 20          # padding inside module on each side
+TOP_HEADER = 34        # height of the module-name band
+BODY_PAD_TOP = 14
+BODY_PAD_BOTTOM = 14
+INOUT_STRIP = 32       # height of the inout strip below the body
+MIN_CANVAS_W = 400
+MIN_CANVAS_H = 180
 CORNER_RADIUS = 8
 
-# Label width budget for "name + bit-width". We measure roughly with a fixed
-# character budget per port label and choose the canvas width from the longest.
-AVG_CHAR_PX = 7        # rough average glyph width for sans-serif @ 12px
-LABEL_BUDGET_PADDING = 8  # extra pixels around the longest label
+# Average glyph width for sans-serif @ 12px (coarse estimate)
+AVG_CHAR_PX = 7
+LABEL_BUDGET_PADDING = 12
 
 # Light-theme palette
 COLOR_BG = "#FFFFFF"
 COLOR_STROKE = "#888888"
 COLOR_TEXT = "#222222"
 COLOR_MUTED = "#666666"
+COLOR_ARROW_IN = "#2E86C1"
+COLOR_ARROW_OUT = "#E74C3C"
+COLOR_ARROW_INOUT = "#9B59B6"
+
+# Arrowhead marker ID suffix
+MARKER_IN = "_arrow_in"
+MARKER_OUT = "_arrow_out"
 
 
 # ---- Width formatting helpers -----------------------------------------------
 
 def _width_str(p: Port) -> str:
-    """Return the bit-width string for label rendering.
-
-    Rules (matching diagram_html.PortView):
-      * 1-bit → omitted (empty string)
-      * fixed width N (>1) → "[MSB:0]"   e.g. 8 → "[7:0]"
-      * parameterised width W → "[W-1:0]" e.g. DATA_WIDTH → "[DATA_WIDTH-1:0]"
-    """
     if p.width.is_parameter:
         if p.width.raw == "1":
-            return ""  # shouldn't happen, but stay safe
+            return ""
         return f"[{p.width.raw}-1:0]"
-    # P0-3 fix: tolerate msb=None (default 1-bit from blank cell) — mirrors
-    # PortWidth.to_verilog() so all 4 outputs handle 1-bit consistently.
     if p.width.msb is None or p.width.msb == 0:
         return ""
     return f"[{p.width.msb}:0]"
 
 
 def _label_text(p: Port) -> str:
-    """Port label = name + bit-width (width omitted for 1-bit)."""
     w = _width_str(p)
     return f"{p.name}{w}"
 
 
 def _label_width(text: str) -> int:
-    """Rough integer label width in pixels.
-
-    We use a fixed average character width; this is intentionally a coarse
-    estimate because pixel-perfect font metrics would require a font shaper
-    dependency. SPEC §4.3 only mandates a sans-serif font, not exact metrics.
-    """
     return max(1, len(text)) * AVG_CHAR_PX
 
 
@@ -91,97 +88,114 @@ class _Layout:
         self.outputs = module.outputs()
         self.inouts = module.inouts()
 
-        # Longest input / output label determines left/right half-width.
+        # Longest input / output label determines canvas width.
         self.max_in_w = max((_label_width(_label_text(p)) for p in self.inputs), default=0)
         self.max_out_w = max((_label_width(_label_text(p)) for p in self.outputs), default=0)
 
-        # Body interior: the part between the two side pads. We split it so
-        # that input + output labels both fit on their side of the rect.
-        # If a side has no ports, give it a small nominal width.
-        left_half = self.max_in_w + SIDE_PAD + LABEL_GAP + 12
-        right_half = self.max_out_w + SIDE_PAD + LABEL_GAP + 12
-        body_w = max(left_half + right_half, MIN_CANVAS_W - 2 * SIDE_PAD)
+        # Body width: label + arrow + gap on each side, centered module body
+        label_zone = self.max_in_w + self.max_out_w + ARROW_LENGTH * 2 + LABEL_GAP * 4
+        body_w = max(label_zone + SIDE_PAD * 2, MIN_CANVAS_W - LABEL_GAP * 4)
+        body_w = max(body_w, 200)
 
-        # Body height: tall enough for max(input, output) rows.
+        # Body height
         n_rows = max(len(self.inputs), len(self.outputs), 1)
         body_h = BODY_PAD_TOP + n_rows * ROW_HEIGHT + BODY_PAD_BOTTOM
 
-        # Canvas size.
+        # Canvas size
         inout_strip_h = INOUT_STRIP if self.inouts else 0
-        canvas_w = max(body_w + 2 * SIDE_PAD, MIN_CANVAS_W)
-        canvas_h = max(TOP_HEADER + body_h + inout_strip_h, MIN_CANVAS_H)
+        canvas_w = max(body_w + LABEL_GAP * 4 + self.max_in_w + self.max_out_w + ARROW_LENGTH * 2,
+                       MIN_CANVAS_W)
 
-        # Module rectangle (rounded). Insets from the canvas.
+        # Recalculate: left margin must fit input labels, right margin must fit output labels
+        left_margin = self.max_in_w + LABEL_GAP + ARROW_LENGTH + 12
+        right_margin = self.max_out_w + LABEL_GAP + ARROW_LENGTH + 12
+        canvas_w = max(left_margin + body_w + right_margin, MIN_CANVAS_W)
+        canvas_h = max(TOP_HEADER + body_h + inout_strip_h + 12, MIN_CANVAS_H)
+
         self.canvas_w = canvas_w
         self.canvas_h = canvas_h
-        self.body_x = SIDE_PAD
-        self.body_y = SIDE_PAD + TOP_HEADER
-        self.body_w = canvas_w - 2 * SIDE_PAD
+
+        # Module rectangle position
+        self.body_x = left_margin
+        self.body_y = TOP_HEADER + 6
+        self.body_w = body_w
         self.body_h = body_h
         self.inout_strip_h = inout_strip_h
         self.inout_y = self.body_y + self.body_h
 
-        # Edge positions (input port tick on left edge, output on right).
+        # Edge positions
         self.left_x = self.body_x
         self.right_x = self.body_x + self.body_w
-        # First row baseline.
+        # First row baseline
         self.row_top = self.body_y + BODY_PAD_TOP + ROW_HEIGHT // 2
 
 
-# ---- Element construction helpers -------------------------------------------
+# ---- Arrow helpers -----------------------------------------------------------
 
-def _tick_and_label(
+def _add_markers(svg: ET.Element) -> None:
+    """Add <defs><marker> arrowheads for input and output arrows."""
+    defs = ET.SubElement(svg, "defs")
+    for mid, color in [(MARKER_IN, COLOR_ARROW_IN), (MARKER_OUT, COLOR_ARROW_OUT)]:
+        marker = ET.SubElement(defs, "marker", {
+            "id": mid.lstrip("_"),
+            "markerWidth": "8",
+            "markerHeight": "6",
+            "refX": "8",
+            "refY": "3",
+            "orient": "auto",
+        })
+        ET.SubElement(marker, "path", {
+            "d": "M 0,0 L 8,3 L 0,6 Z",
+            "fill": color,
+        })
+
+
+def _port_row(
     parent: ET.Element,
     *,
     side: str,
-    cx: int,
-    cy: int,
-    text: str,
-    text_anchor: str,
-    text_x: int,
+    y: int,
+    label_text: str,
+    label_x: int,
+    label_anchor: str,
+    arrow_x1: int,
+    arrow_x2: int,
+    arrow_color: str,
+    marker_end: str | None,
 ) -> None:
-    """Append a port tick (short horizontal line) and label to `parent`."""
-    if side == "left":
-        # Tick points rightward into the body.
-        x1, x2 = cx - 8, cx
-    else:
-        # Tick points leftward into the body (port exits from right edge).
-        x1, x2 = cx, cx + 8
-    ET.SubElement(parent, "line", {
-        "x1": str(x1), "y1": str(cy),
-        "x2": str(x2), "y2": str(cy),
-        "stroke": COLOR_STROKE, "stroke-width": "1",
-    })
-    # Small port pin (square) at the connection point.
-    ET.SubElement(parent, "rect", {
-        "x": str(x2 - 2), "y": str(cy - 2),
-        "width": "4", "height": "4",
-        "fill": COLOR_BG, "stroke": COLOR_STROKE, "stroke-width": "1",
-    })
+    """Add a port label + directional arrow to `parent`."""
     # Label
     t = ET.SubElement(parent, "text", {
-        "x": str(text_x), "y": str(cy + 4),  # +4 to vertically center on baseline
+        "x": str(label_x),
+        "y": str(y + 4),
         "font-family": FONT_FAMILY,
         "font-size": str(FONT_SIZE),
         "fill": COLOR_TEXT,
-        "text-anchor": text_anchor,
+        "text-anchor": label_anchor,
     })
-    t.text = text
+    t.text = label_text
+
+    # Arrow line
+    arrow = ET.SubElement(parent, "line", {
+        "x1": str(arrow_x1),
+        "y1": str(y),
+        "x2": str(arrow_x2),
+        "y2": str(y),
+        "stroke": arrow_color,
+        "stroke-width": "1.5",
+    })
+    if marker_end:
+        arrow.set("marker-end", f"url(#{marker_end})")
 
 
 # ---- Public API -------------------------------------------------------------
 
 def generate_svg(module: Module) -> str:
-    """Render `module` as a self-contained SVG string (declaration included).
-
-    Byte-stable: same Module in → same bytes out, every time.
-    """
     if not isinstance(module, Module):  # pragma: no cover - defensive
         raise TypeError(f"generate_svg expects Module, got {type(module).__name__}")
 
     layout = _Layout(module)
 
-    # Root <svg> element.
     svg = ET.Element("svg", {
         "xmlns": "http://www.w3.org/2000/svg",
         "version": "1.1",
@@ -190,7 +204,7 @@ def generate_svg(module: Module) -> str:
         "viewBox": f"0 0 {layout.canvas_w} {layout.canvas_h}",
     })
 
-    # White background.
+    # White background
     ET.SubElement(svg, "rect", {
         "x": "0", "y": "0",
         "width": str(layout.canvas_w),
@@ -198,19 +212,22 @@ def generate_svg(module: Module) -> str:
         "fill": COLOR_BG,
     })
 
-    # Module name (centered above the body).
+    # Arrowhead markers
+    _add_markers(svg)
+
+    # Module name
     title = ET.SubElement(svg, "text", {
         "x": str(layout.canvas_w // 2),
-        "y": str(SIDE_PAD + TOP_HEADER // 2 + 6),
+        "y": str(TOP_HEADER // 2 + 8),
         "font-family": FONT_FAMILY,
-        "font-size": str(FONT_SIZE + 2),
+        "font-size": "14",
         "font-weight": "bold",
         "fill": COLOR_TEXT,
         "text-anchor": "middle",
     })
     title.text = module.name
 
-    # Module body (rounded rect, rx=8 per SPEC §4.3).
+    # Module body (rounded rect)
     ET.SubElement(svg, "rect", {
         "x": str(layout.body_x),
         "y": str(layout.body_y),
@@ -220,69 +237,95 @@ def generate_svg(module: Module) -> str:
         "ry": str(CORNER_RADIUS),
         "fill": COLOR_BG,
         "stroke": COLOR_STROKE,
-        "stroke-width": "1",
+        "stroke-width": "1.5",
     })
 
-    # Input ports (left side, stacked vertically in Excel order).
+    # Parameters inside the box (if present)
+    if module.parameters:
+        param_text = ", ".join(f"{p.name}={p.value}" for p in module.parameters)
+        pt = ET.SubElement(svg, "text", {
+            "x": str(layout.body_x + layout.body_w // 2),
+            "y": str(layout.body_y + layout.body_h + 8),
+            "font-family": FONT_FAMILY,
+            "font-size": "10",
+            "fill": COLOR_MUTED,
+            "text-anchor": "middle",
+            "font-style": "italic",
+        })
+        pt.text = f"parameters: {param_text}"
+
+    # Input ports (left side)
     for i, p in enumerate(layout.inputs):
-        cy = layout.row_top + i * ROW_HEIGHT
-        # Label is right-anchored so it ends at the edge.
-        text_x = layout.left_x - LABEL_GAP - 8
-        _tick_and_label(
+        y = layout.row_top + i * ROW_HEIGHT
+        label = _label_text(p)
+        label_x = layout.left_x - LABEL_GAP - ARROW_LENGTH
+        # Arrow: from label right-edge to module left-edge
+        arrow_x1 = layout.left_x - ARROW_LENGTH
+        arrow_x2 = layout.left_x
+        _port_row(
             svg,
             side="left",
-            cx=layout.left_x,
-            cy=cy,
-            text=_label_text(p),
-            text_anchor="end",
-            text_x=text_x,
+            y=y,
+            label_text=label,
+            label_x=label_x,
+            label_anchor="end",
+            arrow_x1=arrow_x1,
+            arrow_x2=arrow_x2,
+            arrow_color=COLOR_ARROW_IN,
+            marker_end="arrow_in",
         )
 
-    # Output ports (right side, stacked vertically in Excel order).
+    # Output ports (right side)
     for i, p in enumerate(layout.outputs):
-        cy = layout.row_top + i * ROW_HEIGHT
-        # Label is left-anchored so it starts past the edge.
-        text_x = layout.right_x + LABEL_GAP + 8
-        _tick_and_label(
+        y = layout.row_top + i * ROW_HEIGHT
+        label = _label_text(p)
+        label_x = layout.right_x + LABEL_GAP + ARROW_LENGTH
+        # Arrow: from module right-edge to label left-edge
+        arrow_x1 = layout.right_x
+        arrow_x2 = layout.right_x + ARROW_LENGTH
+        _port_row(
             svg,
             side="right",
-            cx=layout.right_x,
-            cy=cy,
-            text=_label_text(p),
-            text_anchor="start",
-            text_x=text_x,
+            y=y,
+            label_text=label,
+            label_x=label_x,
+            label_anchor="start",
+            arrow_x1=arrow_x1,
+            arrow_x2=arrow_x2,
+            arrow_color=COLOR_ARROW_OUT,
+            marker_end="arrow_out",
         )
 
-    # Inout ports (bottom, distributed horizontally).
+    # Inout ports (bottom)
     if layout.inouts:
-        # Center the inout row inside the body width.
         n = len(layout.inouts)
         slot = layout.body_w // max(n, 1)
         base_y = layout.inout_y + INOUT_STRIP // 2
         for i, p in enumerate(layout.inouts):
             cx = layout.body_x + slot * i + slot // 2
-            # Tick points downward from the body bottom edge.
+            label = _label_text(p)
+            # Vertical line down from module bottom
             ET.SubElement(svg, "line", {
                 "x1": str(cx), "y1": str(layout.inout_y),
-                "x2": str(cx), "y2": str(base_y),
-                "stroke": COLOR_STROKE, "stroke-width": "1",
+                "x2": str(cx), "y2": str(base_y - 6),
+                "stroke": COLOR_ARROW_INOUT, "stroke-width": "1.5",
             })
-            ET.SubElement(svg, "rect", {
-                "x": str(cx - 2), "y": str(layout.inout_y - 2),
-                "width": "4", "height": "4",
-                "fill": COLOR_BG, "stroke": COLOR_STROKE, "stroke-width": "1",
+            # Small diamond for inout
+            ET.SubElement(svg, "polygon", {
+                "points": f"{cx-4},{base_y-2} {cx},{base_y-6} {cx+4},{base_y-2} {cx},{base_y+2}",
+                "fill": COLOR_ARROW_INOUT,
             })
             t = ET.SubElement(svg, "text", {
                 "x": str(cx),
-                "y": str(base_y + FONT_SIZE + 4),
+                "y": str(base_y + FONT_SIZE + 6),
                 "font-family": FONT_FAMILY,
                 "font-size": str(FONT_SIZE),
                 "fill": COLOR_TEXT,
                 "text-anchor": "middle",
             })
-            t.text = _label_text(p)
+            t.text = label
 
-    # If there are no ports at all, place a muted empty-state marker.
+    # Empty-state marker
     if not layout.inputs and not layout.outputs and not layout.inouts:
         t = ET.SubElement(svg, "text", {
             "x": str(layout.canvas_w // 2),
@@ -294,16 +337,12 @@ def generate_svg(module: Module) -> str:
         })
         t.text = "(no ports)"
 
-    # Serialise. ElementTree uses LF in tostring (it inserts \n between tags).
     raw = ET.tostring(svg, encoding="unicode")
-    # Prepend the XML declaration (on its own line) — SPEC requires a complete
-    # self-contained SVG file, declaration included.
     out = '<?xml version="1.0" encoding="UTF-8"?>\n' + raw + "\n"
     return _normalise(out)
 
 
 def _normalise(s: str) -> str:
-    """Enforce LF line endings and strip trailing whitespace per line."""
     out_lines = []
     for line in s.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         out_lines.append(line.rstrip())

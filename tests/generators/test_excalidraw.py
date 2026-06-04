@@ -136,3 +136,22 @@ def test_empty_ports_renders(empty_ports: Module) -> None:
     texts = [e for e in scene["elements"] if e["type"] == "text"]
     assert len(rects) == 1
     assert len(texts) == 1  # the module-name text only — no ports
+
+
+def test_font_family_is_helvetica(uart_rx: Module) -> None:
+    """v0.4: fontFamily must be 5 (Helvetica/Normal), not 1 (Virgil)."""
+    scene = json.loads(generate_excalidraw(uart_rx))
+    texts = [e for e in scene["elements"] if e["type"] == "text"]
+    for t in texts:
+        assert t["fontFamily"] == 5, f"Expected fontFamily=5, got {t['fontFamily']}"
+
+
+def test_arrow_elements_present(uart_rx: Module) -> None:
+    """v0.4: directional arrow elements must connect ports to module rectangle."""
+    scene = json.loads(generate_excalidraw(uart_rx))
+    arrows = [e for e in scene["elements"] if e["type"] == "arrow"]
+    assert len(arrows) > 0, "Expected at least one arrow element"
+    for a in arrows:
+        assert "points" in a
+        assert "strokeColor" in a
+        assert a.get("endArrowhead") == "arrow" or a.get("startArrowhead") == "arrow"

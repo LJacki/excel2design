@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.3
-> 最后更新: 2026-06-01
-> 状态: 已通过第三方设计审查（M1-M5 补丁就位），即将开 Phase 0
+> 版本: v0.4
+> 最后更新: 2026-06-04
+> 状态: §4 框图规范重大升级（v0.3.4）；Phase 0-6 已全部落地
 
 ---
 
@@ -406,51 +406,98 @@ def parse_width(raw: str, known_params: set[str], sheet: str, row: int, col: int
 | SVG | `.svg` | 浅色 | 矢量，可嵌入 PPT/Word | 文档、PPT |
 | Excalidraw | `.excalidraw` | 手绘风 | app.excalidraw.com 可继续编辑 | 早期设计评审 |
 
+**三种格式的共同要求**：
+- ✅ 必须有模块矩形框（包围所有端口连接点）
+- ✅ 必须有方向箭头（→ 输入指向框，← 输出从框指出）
+- ✅ 端口标签必须包含端口名 + 位宽（width=1 省略位宽）
+- ✅ 字节稳定：相同输入 → 相同输出
+
 ### 4.2 HTML 框图规范
 
-**布局**：
+**布局（CSS 模块框 + 端口列表）**：
 ```
-┌─────────────────────────────────┐
-│         uart_rx                 │
-├─────────────────────────────────┤
-│ INPUTS           │  OUTPUTS     │
-│ ─────────        │  ─────────   │
-│ clk              │  rx_data     │
-│ [1:0] wire       │  [7:0] reg   │
-│                  │  8'h00 clk   │
-│ rst_n            │              │
-│ ...              │  rx_valid    │
-└─────────────────────────────────┘
+         ┌──────────────────────────────────┐
+  clk ──→│                                  │──→ rx_data[7:0]  reg
+rst_n ──→│            uart_rx               │──→ rx_valid       reg
+rx_pad ─→│                                  │──→ fifo_full      reg
+          │  parameters: DATA_WIDTH=8, ...   │
+          └──────────────────────────────────┘
 ```
 
-**视觉**：
-- 整体宽度自适应，最小 480px
-- 模块名：粗体，居中
-- input 列左对齐，output 列右对齐
-- 位宽格式：`[MSB:0]`（width=1 时省略）
+**视觉规范**：
+- 模块矩形：CSS `border: 2px solid #888; border-radius: 4px`，最小宽 480px
+- 模块名：居中、粗体、16px，在模块框顶部
+- parameter 横幅：灰底条在模块名下方，字号 12px 斜体
+- **端口行布局**：`[箭头] [端口名] [位宽] [type徽标] [default] [clk]` 的横向流式布局
+  - input 行：箭头 → 在端口名左侧（Unicode `→` 或 CSS `::before`）
+  - output 行：箭头 → 在端口名右侧
+  - inout 行：`↔` 双向箭头
+- **箭头颜色**：input `#2E86C1`（蓝），output `#E74C3C`（红），inout `#9B59B6`（紫）
+- 位宽徽标：等宽字体灰底 `[7:0]` 风格
 - 类型徽标：`wire` 灰底，`reg` 蓝底，`logic` 紫底
-- 注释：斜体小字，紧贴端口名下方
-- 时钟标签：`clk` 小字灰底跟在 reg 端口
-- 字体：等宽（monospace）
-- 颜色：白底 #FFFFFF，灰边 #DDDDDD，主文字 #333333
+- 注释：斜体小字 #888，端口名下方
+- 字体：等宽 `Menlo/Consolas/Courier New`，13px
+- 颜色：白底 #FFFFFF，主文字 #333333，边框 #DDD
 
 ### 4.3 SVG 框图规范
 
-- 画布大小：根据端口数动态计算
-- 模块：圆角矩形（rx=8）
-- input 端口：左侧 + 短横线（小方块）
-- output 端口：右侧 + 短横线（小方块）
-- inout 端口：底部
-- 端口标签：端口名 + 位宽
-- 字体：sans-serif
+**核心元素**：
+1. 模块矩形：圆角 `rx=8`，白底灰边
+2. 端口标签：`{name}[{width}]` 格式，12px sans-serif
+3. **方向箭头**：SVG `<marker>` arrowhead，用 `<line>` 连接端口标签到模块边缘
+4. 箭头大小：6px 三角箭尖
+
+**布局规则**：
+```
+         ← clk_a                     data_a[WIDTH-1:0] →
+         ← rst_a_n    ┌──────────┐   valid_a →
+         ← clk_b      │multi_clock│   data_b[WIDTH-1:0] →
+         ← rst_b_n    │           │   flag_c →
+         ← clk_c      │ WIDTH=16  │   bridge_out[WIDTH-1:0] →
+         ← bridge_in  └──────────┘
+```
+
+- **input 端口**：箭头从 label 末端指向模块左边缘（direction: left→right）
+- **output 端口**：箭头从模块右边缘指向 label（direction: left→right）
+- **inout 端口**：底部水平排列，带双向标记
+- 箭头颜色：input `#2E86C1`，output `#E74C3C`，inout `#9B59B6`
+- **端口标签**：端口名 + 位宽（如 `clk_a`、`bridge_in[WIDTH-1:0]`）
+- 画布大小：根据端口数和标签宽度动态计算
+- 字体：sans-serif，12px
+- 模块名：粗体 14px，模块框上方居中
 
 ### 4.4 Excalidraw 框图规范
 
-- 场景：Excalidraw JSON object
-- 元素：1 个 module 矩形 + N 个 port 文本 + 端口连线
-- 矩形：位置居中 (250, 200)，大小根据端口数自适应
-- 端口文本：等距分布在矩形左右
-- 风格：手绘（roughness=1, strokeStyle=solid）
+**核心元素**：
+1. 模块矩形：`element.type: "rectangle"`, `roughness: 1`, `strokeStyle: "solid"`
+2. 端口文本：`element.type: "text"`, `fontFamily: 5` (Helvetica / "Normal"), `fontSize: 20`
+3. **方向箭头**：`element.type: "arrow"`, 连接文本到矩形边缘
+
+**字体选择（v0.4 起）**：
+- `fontFamily: 5` = Helvetica / "Normal"（非手写，清晰可读）
+- 旧版 `fontFamily: 1` = Virgil（手写草稿体）→ **废弃**
+
+**布局规则**：
+```
+  clk_a ←──┐                    ┌──→ data_a[WIDTH-1:0]
+ rst_a_n ←─┤   ┌──────────┐    ├──→ valid_a
+   clk_b ←─┤   │multi_clock│    ├──→ data_b[WIDTH-1:0]
+ rst_b_n ←─┤   │           │    ├──→ flag_c
+   clk_c ←─┤   │  WIDTH=16 │    ├──→ bridge_out[WIDTH-1:0]
+bridge_in ←─┘   └──────────┘    └──→
+```
+
+- **箭头方向**：input 箭头从文本指向矩形（←─），output 箭头从矩形指向文本（─→）
+- **箭头属性**：`strokeColor` 按方向（input `#2E86C1`，output `#E74C3C`），`strokeWidth: 2`
+- **文本宽度动态计算**：
+  - `text.width = max(len(label) * 9, 60)` — 每字符 ~9px（fontSize=20, Helvetica 平均）
+  - `text.height = 25`
+- **矩形大小动态计算**：
+  - `RECT_W = max(300, longest_label_width + 200)`
+  - `RECT_H = max(200, max(inputs, outputs) * ROW_SPACING + 80)`
+- 端口行间距：`ROW_SPACING = 30`
+- 整体位置：模块左上角 `(250, 200)`，超出右边缘自动扩展 canvas
+- 固定 seed：元素 ID 派生的整数值（非 random），保证字节稳定
 
 ---
 
