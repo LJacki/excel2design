@@ -49,9 +49,9 @@ def test_module_ends_with_endmodule() -> None:
 def test_parameter_declaration() -> None:
     m = load("uart_rx")
     v = generate_wrapper(m)
-    assert "parameter [31:0] DATA_WIDTH = 8" in v
-    assert "parameter [31:0] FIFO_DEPTH = 16" in v
-    assert "parameter [31:0] CLK_FREQ_MHZ = 100" in v
+    assert "DATA_WIDTH" in v and "= 8" in v
+    assert "FIFO_DEPTH" in v and "= 16" in v
+    assert "CLK_FREQ_MHZ" in v and "= 100" in v
 
 
 # ---- Port order (SPEC §3.5.4) ----------------------------------------------

@@ -1,18 +1,16 @@
 {# Verilog wrapper template per SPEC §5.
-   Byte-stable: no random, no timestamp, no env vars.
-   Jinja2 env: trim_blocks=False, lstrip_blocks=True, keep_trailing_newline=True.
-   LF only, no trailing whitespace. Port order: in/out/inout — each in Excel order. #}
+   v0.4: column-aligned port/parameter declarations (pre-formatted in Python). #}
 // =====================================================
 // Module:    {{ module.name }}
 // Source:    {{ source_file }}{{ " / sheet: " + source_sheet if source_sheet else "" }}
 // =====================================================
 // Company Confidential
 // =====================================================
-{%- if module.parameters %}
+{%- if param_lines %}
 
 module {{ module.name }} #(
-{%- for p in module_parameters %}
-    {{ p.param_type.value }}{% if p.width %} [{{ p.width|int - 1 }}:0]{% endif %} {{ p.name }} = {{ p.value }}{{ "," if not loop.last else "" }}
+{%- for line in param_lines %}
+{{ line }}
 {%- endfor %}
 ) (
 {%- else %}
@@ -20,27 +18,28 @@ module {{ module.name }} #(
 module {{ module.name }} (
 {%- endif %}
     // ---------- INPUTS ----------
-{%- for port in input_ports %}
-    input  {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last or output_ports or inout_ports else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- for line in input_lines %}
+{{ line }}
 {%- endfor %}
-{%- if output_ports %}
+{%- if output_lines %}
     // ---------- OUTPUTS ----------
-{%- for port in output_ports %}
-    output {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last or inout_ports else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- for line in output_lines %}
+{{ line }}
 {%- endfor %}
 {%- endif %}
-{%- if inout_ports %}
+{%- if inout_lines %}
     // ---------- INOUTS ----------
-{%- for port in inout_ports %}
-    inout  {{ "signed " if port.signed else "" }}{{ port.type.value }}  {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }}{{ "," if not loop.last else "" }}{% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- for line in inout_lines %}
+{{ line }}
 {%- endfor %}
 {%- endif %}
 );
-
 {%- for port in internal_wires %}
-    wire {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "  " }}{{ port.name }};
+
+    wire {{ port.width.to_verilog() }}{{ " " if port.width.to_verilog() else "" }}{{ port.name }};
 {%- endfor %}
 {%- if not internal_wires %}
+
     // (none — all wires are input ports)
 {%- endif %}
 
