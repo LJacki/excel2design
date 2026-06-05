@@ -20,8 +20,10 @@ from openpyxl.worksheet.worksheet import Worksheet
 from excel2design.core.exceptions import (
     DuplicatePortError,
     ExcelParseError,
+    FormulaCellError,
     HeaderMismatchError,
     MarkerMissingError,
+    MergedCellError,
     ModuleNotFoundError,
     PortValidationError,
 )
@@ -33,6 +35,7 @@ from excel2design.core.models import (
     Port,
     ResetType,
     SignalType,
+    Define,
 )
 from excel2design.parsers.default import DefaultValueError, parse_default
 from excel2design.parsers.width import PortWidth, parse_width
@@ -43,6 +46,8 @@ from excel2design.utils.identifier import check_identifier
 # Markers and canonical column orders
 MARKER_PARAMETERS = "# === PARAMETERS ==="
 MARKER_PORTS = "# === PORTS ==="
+MARKER_DEFINES = "# === DEFINES ==="
+DEFINES_SHEET = "@defines"
 
 PARAM_HEADER = ["name", "value", "width", "param_type", "comment"]
 PORT_HEADER = [
@@ -55,6 +60,7 @@ PORT_HEADER = [
 
 def parse_workbook(path: Path | str) -> list[Module]:
     """Parse a .xlsx file. Returns one Module per non-empty sheet.
+    Skips @defines sheet.
 
     Raises:
         ExcelParseError: on any structural problem.
@@ -66,11 +72,22 @@ def parse_workbook(path: Path | str) -> list[Module]:
     wb = load_workbook(path, data_only=True)
     modules: list[Module] = []
     for sheet_name in wb.sheetnames:
+        if sheet_name == DEFINES_SHEET:
+            continue
         ws = wb[sheet_name]
         module = _parse_sheet(ws, source_file=path)
         if module is not None:
             modules.append(module)
     return modules
+
+
+def parse_defines(path: Path | str) -> list[Define]:
+    """Parse the @defines sheet only. Returns empty list if no such sheet."""
+    path = Path(path)
+    wb = load_workbook(path, data_only=True)
+    if DEFINES_SHEET in wb.sheetnames:
+        return _parse_defines_sheet(wb[DEFINES_SHEET])
+    return []
 
 
 def get_module(modules: list[Module], name: str) -> Module:
@@ -305,3 +322,40 @@ def _validate_unique_ports(ports: list[Port], source_sheet: str) -> None:
     for name, rows in rows_by_name.items():
         if len(rows) > 1:
             raise DuplicatePortError(source_sheet, name, rows)
+
+
+# ---- v0.5: @defines sheet parsing ------------------------------------------
+
+def _parse_defines_sheet(ws: Worksheet) -> list[Define]:
+    """Parse the @defines sheet. Returns list of Define entries."""
+    rows = list(ws.iter_rows(values_only=False))
+    if not rows:
+        return []
+
+    # Find the DEFINES marker
+    marker_row = _find_marker(ws, rows, MARKER_DEFINES)
+    if marker_row is None:
+        return []
+
+    # Header row follows the marker
+    header_row = marker_row + 1
+    if header_row >= len(rows):
+        return []
+    header_cells = rows[header_row]
+    header = [str(c.value).strip().lower() if c.value else "" for c in header_cells[:3]]
+    expected = ["name", "value", "comment"]
+    if header != expected:
+        raise HeaderMismatchError(ws.title, header_row + 1, expected, header)
+
+    defines: list[Define] = []
+    for r in range(header_row + 1, len(rows)):
+        cells = rows[r]
+        name = str(cells[0].value).strip() if cells[0].value else ""
+        if not name or name.startswith("#"):
+            continue
+        raw_value = cells[1].value
+        value = str(raw_value).strip() if raw_value is not None else ""
+        comment = str(cells[2].value).strip() if len(cells) > 2 and cells[2].value else None
+        defines.append(Define(name=name, value=value, comment=comment))
+
+    return defines

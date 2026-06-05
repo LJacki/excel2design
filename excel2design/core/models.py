@@ -166,3 +166,74 @@ class Module:
 
     def parameter_names(self) -> set[str]:
         return {p.name for p in self.parameters}
+
+
+# ---- v0.5: Define / Project / SubmoduleInstance ---------------------------
+
+
+@dataclass
+class Define:
+    """A `define macro from the @defines sheet (SPEC §16)."""
+    name: str
+    value: str        # "" = define without value
+    comment: Optional[str] = None
+
+
+@dataclass
+class SubmoduleInstance:
+    """A sub-module instantiated within a parent module (SPEC §15.2)."""
+    instance_name: str            # "u_ctrl"
+    module: Module                # sub-module definition
+    depth: int                    # 1 = direct child of wrapper
+    parent_sheet: str             # parent's sheet name
+
+
+@dataclass
+class Project:
+    """Top-level project container parsed from a multi-sheet Excel (SPEC §15.2).
+
+    modules:   {sheet_name: Module} for all module sheets
+    hierarchy: {parent_sheet: [child_sheet_names]} tree
+    defines:   parsed @defines sheet entries
+    """
+
+    modules: dict[str, Module] = field(default_factory=dict)
+    hierarchy: dict[str, list[str]] = field(default_factory=dict)
+    defines: list[Define] = field(default_factory=list)
+
+    @property
+    def top_modules(self) -> list[str]:
+        """Return sheet names of top-level modules (no '.' in name)."""
+        return sorted([n for n in self.modules if "." not in n])
+
+    def get_submodules(self, parent_sheet: str, depth_offset: int = 0) -> list[SubmoduleInstance]:
+        """Return list of SubmoduleInstance for a given parent (recursive)."""
+        children: list[SubmoduleInstance] = []
+        for child_sheet in self.hierarchy.get(parent_sheet, []):
+            child_mod = self.modules.get(child_sheet)
+            if child_mod is None:
+                continue
+            # instance_name = last segment of dotted sheet name
+            instance_name = child_sheet.rsplit(".", 1)[-1]
+            children.append(SubmoduleInstance(
+                instance_name=instance_name,
+                module=child_mod,
+                depth=depth_offset + 1,
+                parent_sheet=parent_sheet,
+            ))
+            # Recursively add grandchildren
+            children.extend(self.get_submodules(child_sheet, depth_offset + 1))
+        return children
+
+    def walk_bfs(self) -> list[str]:
+        """BFS traversal: top modules first, then children, etc. (SPEC §8.4)."""
+        result: list[str] = []
+        queue = list(self.top_modules)
+        while queue:
+            sheet = queue.pop(0)
+            if sheet not in result:
+                result.append(sheet)
+            for child in sorted(self.hierarchy.get(sheet, [])):
+                if child not in result:
+                    queue.append(child)
+        return result

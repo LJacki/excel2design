@@ -12,7 +12,8 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from excel2design.core.models import Module, Port, ResetType
+from excel2design.core.models import Module, Port, ResetType, Project
+from excel2design.core.connection import ConnectionKind, match_port, collect_internal_wires
 
 
 _TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
@@ -145,6 +146,7 @@ def generate_wrapper(
     module: Module,
     source_file: Optional[Path | str] = None,
     source_sheet: Optional[str] = None,
+    project: Optional[Project] = None,
 ) -> str:
     env = _setup_env()
     template = env.get_template("verilog_wrapper.j2")
@@ -157,6 +159,52 @@ def generate_wrapper(
     regs_with_default = [p for p in module.regs() if p.default]
     always_groups = _group_regs_by_always(regs_with_default)
 
+    # v0.5: submodule instances and internal wires (optional)
+    sub_instances = []
+    internal_wires = []
+    if project is not None:
+        sheet = source_sheet or module.name
+        instances = project.get_submodules(sheet)
+        wires = collect_internal_wires(project, sheet)
+
+        for w in wires:
+            internal_wires.append({
+                "name": w.name,
+                "width": w.width,
+                "sources": w.sources,
+            })
+
+        for inst in instances:
+            ports = []
+            for p in inst.module.ports:
+                result = match_port(p, module, [])
+                conn = result.target_name if result.kind != ConnectionKind.UNCONNECTED else ""
+                comment = ""
+                if result.kind == ConnectionKind.UNCONNECTED:
+                    if p.direction.value == "input":
+                        comment = "// TODO: drive this signal"
+                    else:
+                        comment = "// TODO: no matching port"
+                elif not result.width_match:
+                    comment = f"// {result.width_note}"
+                ports.append({
+                    "name": p.name,
+                    "connection": conn,
+                    "comment": comment,
+                })
+            # Render the instance
+            inst_env = _setup_env()
+            inst_tpl = inst_env.get_template("partial_instance.j2")
+            inst_render = inst_tpl.render(
+                inst={
+                    "module": inst.module,
+                    "instance_name": inst.instance_name,
+                    "parameters": inst.module.parameters,
+                    "ports": ports,
+                }
+            )
+            sub_instances.append({"render": inst_render})
+
     return template.render(
         module=module,
         source_file=str(source_file) if source_file else "",
@@ -167,4 +215,6 @@ def generate_wrapper(
         inout_lines=_fmt_ports(inout_ports, max_name),
         regs_with_default=regs_with_default,
         always_groups=always_groups,
+        internal_wires=internal_wires,
+        sub_instances=sub_instances,
     )

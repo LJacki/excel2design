@@ -1,0 +1,15 @@
+{# Submodule instance partial template (v0.5).
+   Renders one submodule instantiation with port connections. #}
+{%- if inst.parameters %}
+    {{ inst.module.name }} #(
+{%- for p in inst.module.parameters %}
+        .{{ p.name }}({{ p.name }}){% if not loop.last %},{% endif %}
+{%- endfor %}
+    ) {{ inst.instance_name }} (
+{%- else %}
+    {{ inst.module.name }} {{ inst.instance_name }} (
+{%- endif %}
+{%- for port in inst.ports %}
+        .{{ port.name }}({{ port.connection }}){% if port.comment %}  // {{ port.comment }}{% endif %}
+{%- endfor %}
+    );

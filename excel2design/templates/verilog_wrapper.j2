@@ -58,5 +58,19 @@ module {{ module.name }} (
     end
 {%- endfor %}
 {%- endif %}
+{%- if internal_wires %}
+
+    // ---------- INTERNAL WIRES ----------
+{%- for w in internal_wires %}
+    wire {{ w.width }} {{ w.name }};{% if w.sources %}  // connects {{ w.sources | join(' <-> ') }}{% endif %}
+{%- endfor %}
+{%- endif %}
+{%- if sub_instances %}
+
+    // ---------- SUB-MODULES ----------
+{%- for inst in sub_instances %}
+    {{ inst.render }}
+{%- endfor %}
+{%- endif %}
 
 endmodule
