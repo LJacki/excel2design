@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.4
+> 版本: v0.5-draft
 > 最后更新: 2026-06-04
-> 状态: 框图 v0.4 + Verilog 列对齐完成；225 测试全过
+> 状态: SPEC §15-20 子模块层次化方案冻结；v0.4 已交付（225 tests）
 
 ---
 
@@ -747,7 +747,9 @@ generate_wrapper(module, output=Path("out/uart_rx.v"))
 | 5a | Wrapper 基础（端口 + parameter） | 0.5d | 中 | 输出符合 §5.3/5.4；端口对齐格式固定（§5.7.9）；`test_no_diff_on_repeat` 通过 |
 | 5b | Wrapper 复位 always + TODO 注释 | 1.5d | **高** | 多 (clock, reset_type) 分组正确（§3.5.6 / §5.5）；`test_mixed_reset` 等通过；iverilog `-t null` 语法 check 通过 |
 | 6 | CLI + 集成测试 + README 截图 | 1.5d | 中 | `excel2design all` 一键跑通；端到端测试（CLI + iverilog smoke）；README 补三张截图 |
-| **总** | | **10.5d** | | |
+| **总** | | **10.5d + 4.3d = 14.8d** | |
+| **v0.3-v0.4 (新增)** | **框图 v0.4 + Verilog 列对齐** | **1d** | **方向箭头 / 时钟域颜色 / 六列对齐** |
+| **v0.5 (新增)** | **子模块层次化 + 实例化** | **4.3d** | **多 sheet 层次解析 / 连接算法 / 多文件输出** |
 
 **风险最高的 3 个 Phase**：1（解析器是输入闸）、4（Excalidraw schema 不熟）、5b（wrapper 是核心交付）。
 
@@ -943,6 +945,13 @@ def test_reset_type_none_with_default(none_module):
 - [ ] 端口默认值与 parameter 重名（如 parameter `WIDTH` 和端口 `width`）— v0.3 视作不同 identifier，不处理
 - [ ] `interface=1` 端口在 Excel 中的真实处理逻辑（v0.3 仅记录，不做特殊处理）
 
+### v0.5 新增风险
+
+- [ ] 同名端口多驱动（子模块间双向连接，需判断方向）
+- [ ] 参数化实例覆盖（子模块 parameter override 的合法性检查）
+- [ ] 层次化框图布局过密（多模块嵌套时坐标碰撞）
+- [ ] 跨文件子模块引用（子模块在另一个 Excel 文件）
+
 ---
 
 ## 15. 任务分配方案（v0.3 启动版）
@@ -958,61 +967,258 @@ def test_reset_type_none_with_default(none_module):
 
 ### 15.2 分配原则
 
-- **核心代码**（解析器、wrapper 核心、CLI、异常）→ **小马亲自写**，避免返工
-- **机械重复代码**（HTML 框图、SVG 框图、Excalidraw 框图）→ **派子代理**，省时间
-- **可并行的 phase** → 同时派 2-3 个子代理，加速
-- **串行 phase** → 小马先做，子代理在依赖就位后接入
+## 15. 子模块层次化（v0.5 新增）
 
-### 15.3 Phase 分配明细
+### 15.1 Sheet 命名约定
 
-| Phase | 执行人 | 备注 |
-|---|---|---|
-| 0 项目骨架 | 小马 | pyproject.toml / 目录结构 / 样例生成脚本 / .gitignore / CI 雏形 |
-| 1 解析器 | 小马 | 核心代码，§3.5 全部实现细节 |
-| **1.5** Golden baseline | 小马 | 4 个 fixture + expected/ 目录；本阶段是"刹车"，确保后面 phase 不会回退 |
-| 2 HTML 框图 | **Subagent A** | 单文件任务，参考 architecture-diagram skill 风格 |
-| 3 SVG 框图 | **Subagent B** | 与 2 并行，用 ElementTree 而非 Jinja2 |
-| 4 Excalidraw 框图 | **Subagent C** | 与 2/3 并行，需固定 seed 保稳定 |
-| 5a Wrapper 基础 | 小马 | 端口声明 + parameter 注入 + initial 块（不复杂，先打底） |
-| 5b Wrapper 复位 always | 小马 | 核心交付，多 clock 分块，TODOs 注释 |
-| 6 CLI + 集成 | 小马 | click 子命令 + e2e 测试 + README 截图 |
+用 `.` 分隔表示层级关系：
 
-### 15.4 Git 提交约定
+```
+Sheet: sram_wrapper              ← 顶层模块
+Sheet: sram_wrapper.u_ctrl       ← 实例名 u_ctrl，子模块
+Sheet: sram_wrapper.u_ctrl.u_fifo ← 二级嵌套
+Sheet: sram_wrapper.u_datapath   ← 实例名 u_datapath
+```
 
-- **小颗粒提交**：每个可工作的中间态都提交，方便回滚
-- **commit message 格式**：`<type>(<scope>): <subject>`
-  - type: `feat` / `fix` / `docs` / `test` / `refactor` / `chore`
-  - scope: `phase0` / `parser` / `diagram-html` / `wrapper` / `cli` / ...
-  - 例: `feat(parser): add cell_to_str with type whitelist`
-- **Phase 边界提交**：每个 phase 结束打 tag `phase-N-done`（轻量 tag）
-- **Subagent 工作提交**：子代理完成任务后由小马统一 review + commit，commit message 带 `Co-authored-by: subagent`
+**规则**：
+- 顶层 sheet 无 `.` → wrapper 模块
+- `A.B` → A 的子模块，实例名 = `B`
+- `A.B.C` → B 的子模块，实例名 = `C`，三级深度
+- 不限制嵌套深度
 
-### 15.5 任务追踪文件
+**不需要 SUBMODULES 段**——层次关系由 sheet 名隐式定义。
 
-- **`docs/TASKS.md`**：高粒度 todo，phase 进展，subagent 任务派发记录
-- **`docs/SUBAGENT_LOG.md`**：所有与 subagent 交互的 prompt / response 摘要（关键决策点）
-- **`docs/CHANGELOG.md`**：用户视角的 changelog（区别于 git log）
+### 15.2 数据模型
 
-### 15.6 卡点处理
+```python
+@dataclass
+class Project:
+    modules: dict[str, Module]              # sheet_name → Module
+    hierarchy: dict[str, list[str]]         # parent_sheet → [child_sheet_names]
+    defines: list[Define]                   # @defines sheet 内容
 
-- **subagent 失败/质量差** → 重新派或转小马亲自写
-- **小马卡住超 30 分钟** → 写卡点记录到 `docs/TASKS.md` 末尾，继续推进其他 phase
-- **Jack 必须决策的事项** → 写进 `docs/TASKS.md` 的 "## Pending Decision" 段，等下次会话
+@dataclass
+class Define:
+    name: str
+    value: str
+    comment: Optional[str]
+
+@dataclass
+class SubmoduleInstance:
+    instance_name: str                      # "u_ctrl"
+    module: Module                          # 子模块定义
+    depth: int                              # 嵌套深度（1 = 直属于 wrapper）
+    parent_sheet: str                       # 父模块的 sheet 名
+```
+
+### 15.3 层次解析器
+
+```python
+def parse_project(xlsx_path: Path) -> Project:
+    """解析所有 sheet → 构建层次树 → 返回 Project"""
+    # 1. 读 @defines sheet（如果存在）
+    # 2. 读所有模块 sheet → {sheet_name: Module}
+    # 3. 按 sheet 名构建 hierarchy tree
+    #    sram_wrapper.u_ctrl.u_fifo → parent = sram_wrapper.u_ctrl
+```
+
+### 15.4 多文件输出
+
+```
+output/sram_wrapper/
+├── define/
+│   └── sram_wrapper.vh
+├── doc/
+│   ├── sram_wrapper.html
+│   ├── sram_wrapper.svg
+│   ├── sram_wrapper.excalidraw
+│   ├── u_ctrl.html / .svg / .excalidraw
+│   ├── u_ctrl_fifo.html / .svg / .excalidraw
+│   └── u_datapath.html / .svg / .excalidraw
+├── filelist/
+│   └── sram_wrapper.f
+└── rtl/
+    ├── sram_wrapper.v
+    ├── u_ctrl.v
+    ├── u_ctrl_fifo.v
+    └── u_datapath.v
+```
 
 ---
 
-## 16. 立即启动（v0.3 启动清单）
+## 16. Define 文件生成（v0.5 新增）
 
-按以下顺序执行，不依赖 Jack 决策：
+### 16.1 `@defines` Sheet
 
-1. ✅ 完成（v0.3 SPEC 提交）
-2. ⏳ Step 1: 写 `docs/TASKS.md` + `docs/SUBAGENT_LOG.md` + `docs/CHANGELOG.md` 空文件
-3. ⏳ Step 2: Phase 0 — pyproject.toml / 目录结构 / 样例生成脚本
-4. ⏳ Step 3: Phase 1 — 数据模型 + 解析器（含 §3.5 全部实现细节）
-5. ⏳ Step 4: Phase 1.5 — Golden baseline 框架
-6. ⏳ Step 5: 并行派 Subagent A/B/C（HTML/SVG/Excalidraw 框图）
-7. ⏳ Step 6: Phase 5a/5b — wrapper（核心）
-8. ⏳ Step 7: Phase 6 — CLI + 集成 + README
-9. 📋 等 Jack 验收
+独立 sheet，在所有模块 sheet 之前，两列格式：
+
+```
+Sheet: @defines
+
+# === DEFINES ===
+name              | value | comment
+SRM_DW            | 256   | SRAM 数据通路位宽
+ENABLE_ECC        | 1     | 开启 ECC 校验
+CLK_FREQ_MHZ      | 800   | 时钟频率(MHz)
+```
+
+**规则**：
+- 与 parameter 段相同格式，但 `value` 是必要字段
+- 不检查 Verilog identifier（`define 允许包含特殊字符`）
+- 空 value → 视为 `define FOO`（无值宏）
+
+### 16.2 生成 `.vh`
+
+```verilog
+// =====================================================
+// sram_wrapper.vh — generated by excel2design v0.5
+// =====================================================
+`define SRM_DW        256
+`define ENABLE_ECC    1
+`define CLK_FREQ_MHZ  800
+```
+
+**格式**：左对齐，`define 名 + 空格 + value`。
+
+### 16.3 `.f` 文件列表
+
+```verilog
+// sram_wrapper.f — generated by excel2design v0.5
+rtl/sram_wrapper.v
+rtl/u_ctrl.v
+rtl/u_ctrl_fifo.v
+rtl/u_datapath.v
+```
+
+按例化顺序（层次遍历），相对路径，可直接喂 iverilog / VCS / xrun。
+
+---
+
+## 17. 实例化连接算法（v0.5 新增）
+
+### 17.1 连接策略
+
+对每个子模块的所有端口，按优先级查找连接目标：
+
+| 优先级 | 规则 | 示例 |
+|--------|------|------|
+| 1 | 父模块有同名端口 → 直连 | `clk` → `clk` |
+| 2 | 兄弟模块有同名端口 → 生成内部 wire | `data_bus` 连接 u_a ↔ u_b |
+| 3 | 父模块有同名 parameter → 参数化连接 | `WIDTH` → `#(.WIDTH(WIDTH))` |
+
+**未匹配**：
+- 输出端口 → 悬空 `()` + `// TODO: no matching port`
+- 输入端口 → 悬空 + `// TODO: drive this signal`
+
+### 17.2 位宽不匹配
+
+连接时检测位宽不一致，生成注释：
+
+```verilog
+    .data_bus (data_bus),   // TODO: width mismatch — u_ctrl:[15:0] vs u_datapath:[7:0]
+```
+
+**不阻断生成**——只标记，留给工程师处理。
+
+### 17.3 生成示例
+
+```verilog
+module sram_wrapper #(...) (
+    input  wire clk,
+    ...
+);
+    // ---------- INTERNAL WIRES ----------
+    wire [SRM_DW-1:0] data_bus;   // connects u_ctrl ↔ u_datapath
+
+    // ---------- SUB-MODULES ----------
+    u_ctrl u_ctrl (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .data_bus (data_bus),
+        .cfg_in   (cfg_in)         // ← 直连 wrapper port
+    );
+
+    u_datapath u_datapath (
+        .clk      (clk),
+        .data_bus (data_bus),
+        .result   (result)         // ← 直连 wrapper port
+    );
+endmodule
+```
+
+---
+
+## 18. 层次化框图（v0.5 新增）
+
+### 18.1 总图布局
+
+Wrapper 外框内嵌套子模块内框，端口连线：
+
+```
+  ┌─── sram_wrapper ───────────────────────────────┐
+  │                                                 │
+  │  ← clk                                          │
+  │  ← rst_n    ┌── u_ctrl ──┐  ┌─ u_datapath ──┐ │
+  │  ← cfg ────→│ cfg_in     │  │               │ │
+  │             │    data ───┼──┼→ data_bus     │ │ → result
+  │  ← din ────→│ din        │  │               │ │
+  │             └────────────┘  └───────────────┘ │
+  └─────────────────────────────────────────────────┘
+```
+
+### 18.2 连线规则
+
+| 连线类型 | 视觉 | 示例 |
+|---------|------|------|
+| wrapper port → submodule port | 从 wrapper 边缘穿过到子模块边缘 | `clk` → `u_ctrl.clk` |
+| submodule A → submodule B | 子模块间直接连线 | `u_ctrl.data` → `u_datapath.data_bus` |
+
+### 18.3 独立框图批量模式
+
+`excel2design diagram --all` → 为每个 sheet 独立生成框图，放入 `doc/` 目录。
+
+### 18.4 实现优先级
+
+1. **SVG**：原生 `<rect>` + `<line>`，最易实现
+2. **Excalidraw**：矩形+箭头坐标计算，中等复杂度
+3. **HTML**：CSS 嵌套 + inline SVG，复杂度最高（v0.5 可降级为纯列表+连线表）
+
+---
+
+## 19. 异常与容错（v0.5 扩展）
+
+### 19.1 层次异常
+
+| 异常类型 | 触发条件 | 行为 |
+|---------|---------|------|
+| `OrphanChildError` | sheet `A.B` 但 `A` 不存在 | 报错退出 |
+| `RecursiveHierarchyError` | 循环引用（检测到重复 . 前缀） | 报错退出 |
+| `EmptyHierarchyError` | 没有顶层模块（全是子模块 sheet） | 警告 + 全展开 |
+
+### 19.2 连线异常
+
+| 异常类型 | 触发条件 | 行为 |
+|---------|---------|------|
+| `WidthMismatchWarning` | 同名端口位宽不同 | 生成 TODO 注释 |
+| `UnconnectedPortWarning` | 子模块端口无匹配 | 悬空 + TODO |
+| `AmbiguousConnectionWarning` | 多个兄弟模块有同名端口 | 选第一个匹配 + 警告注释 |
+
+---
+
+## 20. v0.5 阶段路线图
+
+| Phase | 目标 | 估时 | 验收标准 |
+|---|---|---|---|
+| **7** | `@defines` 解析 + `.vh` + `.f` 生成 | 0.5d | `define SRM_DW 256` 输出匹配 |
+| **8** | 层次解析器 + Project 数据模型 | 0.5d | `parse_project()` 正确构建多级树 |
+| **9a** | 实例化连接算法 | 0.5d | 同名端口匹配、宽度不匹配标记 |
+| **9b** | Verilog 实例化模板 | 0.5d | 子模块 `.port(signal)` 连接正确 |
+| **9c** | 多文件输出 + CLI `--all` | 0.3d | 目录结构符合 §15.4 |
+| **10a** | 独立框图批量模式 | 0.2d | `diagram --all` 全模块出图 |
+| **10b** | 层次化 SVG 框图 | 0.5d | 嵌套矩形 + 连线渲染正确 |
+| **10c** | 层次化 Excalidraw 框图 | 0.5d | 同上 |
+| **11** | 集成测试 + 多 sheet fixture | 0.5d | `tests/fixtures/hierarchy/` 三个层次 |
+| **文档** | SPEC + TASKS 更新 | 0.3d | — |
+| **总** | | **~4.3d** | |
 
 
