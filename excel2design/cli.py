@@ -33,6 +33,8 @@ from excel2design.generators.diagram_html import generate_html
 from excel2design.generators.diagram_svg import generate_svg
 from excel2design.generators.diagram_excalidraw import generate_excalidraw
 from excel2design.generators.verilog import generate_wrapper
+from excel2design.generators.project_output import generate_all as generate_project_output
+from excel2design.parsers.hierarchy import parse_project
 
 
 # ---- Error handling -------------------------------------------------------
@@ -125,7 +127,7 @@ def parse(excel: Path, as_json: bool) -> None:
 
 @main.command()
 @click.argument("excel", type=click.Path(exists=False, path_type=Path))
-@click.argument("module_name")
+@click.argument("module_name", required=False, default=None)
 @click.option(
     "--format", "fmt",
     type=click.Choice(["html", "svg", "excalidraw", "all"], case_sensitive=False),
@@ -133,36 +135,50 @@ def parse(excel: Path, as_json: bool) -> None:
     help="Diagram format to generate (default: all)",
 )
 @click.option(
+    "--all", "all_modules", is_flag=True, default=False,
+    help="Generate diagrams for all modules",
+)
+@click.option(
     "--output", "-o",
     type=click.Path(path_type=Path),
     default=Path("./output"),
     help="Output directory (default: ./output)",
 )
-def diagram(excel: Path, module_name: str, fmt: str, output: Path) -> None:
-    """Generate one or more box diagrams for a module."""
-    try:
-        m = _load_module(excel, module_name)
-    except Exception as e:
-        click.echo(_ErrorRenderer.render(e), err=True)
-        sys.exit(_exit_code(e))
+def diagram(excel: Path, module_name: str | None, fmt: str, all_modules: bool, output: Path) -> None:
+    """Generate box diagrams for one or all modules."""
+    if all_modules:
+        try:
+            modules = parse_workbook(excel)
+        except Exception as e:
+            click.echo(_ErrorRenderer.render(e), err=True)
+            sys.exit(_exit_code(e))
+    elif module_name is None:
+        raise click.UsageError("Missing argument MODULE_NAME or use --all for all modules.")
+    else:
+        try:
+            modules = [_load_module(excel, module_name)]
+        except Exception as e:
+            click.echo(_ErrorRenderer.render(e), err=True)
+            sys.exit(_exit_code(e))
 
     output.mkdir(parents=True, exist_ok=True)
     written: list[str] = []
 
-    if fmt in ("html", "all"):
-        p = output / f"{module_name}.html"
-        p.write_text(generate_html(m), encoding="utf-8", newline="\n")
-        written.append(str(p))
+    for m in modules:
+        if fmt in ("html", "all"):
+            p = output / f"{m.name}.html"
+            p.write_text(generate_html(m), encoding="utf-8", newline="\n")
+            written.append(str(p))
 
-    if fmt in ("svg", "all"):
-        p = output / f"{module_name}.svg"
-        p.write_text(generate_svg(m), encoding="utf-8", newline="\n")
-        written.append(str(p))
+        if fmt in ("svg", "all"):
+            p = output / f"{m.name}.svg"
+            p.write_text(generate_svg(m), encoding="utf-8", newline="\n")
+            written.append(str(p))
 
-    if fmt in ("excalidraw", "all"):
-        p = output / f"{module_name}.excalidraw"
-        p.write_text(generate_excalidraw(m), encoding="utf-8", newline="\n")
-        written.append(str(p))
+        if fmt in ("excalidraw", "all"):
+            p = output / f"{m.name}.excalidraw"
+            p.write_text(generate_excalidraw(m), encoding="utf-8", newline="\n")
+            written.append(str(p))
 
     for w in written:
         click.echo(f"Wrote {w}")
@@ -172,7 +188,7 @@ def diagram(excel: Path, module_name: str, fmt: str, output: Path) -> None:
 
 @main.command()
 @click.argument("excel", type=click.Path(exists=False, path_type=Path))
-@click.argument("module_name")
+@click.argument("module_name", required=False, default=None)
 @click.option(
     "--output", "-o",
     type=click.Path(path_type=Path),
@@ -200,7 +216,7 @@ def wrapper(excel: Path, module_name: str, output: Path | None) -> None:
 
 @main.command()
 @click.argument("excel", type=click.Path(exists=False, path_type=Path))
-@click.argument("module_name")
+@click.argument("module_name", required=False, default=None)
 @click.option(
     "--output", "-o",
     type=click.Path(path_type=Path),
@@ -238,6 +254,29 @@ def all_cmd(excel: Path, module_name: str, output: Path) -> None:
 # 'all' is a Python builtin; expose the command as 'all' via alias
 all = all_cmd  # type: ignore[assignment]
 
+
+
+# ---- project (v0.5) -------------------------------------------------------
+
+@main.command()
+@click.argument("excel", type=click.Path(exists=True, path_type=Path))
+@click.option("--output", "-o", type=click.Path(file_okay=False, path_type=Path),
+              default=Path("output"), help="Output root directory")
+def project(excel: Path, output: Path) -> None:
+    """Generate complete project from multi-sheet Excel.
+
+    Creates define/, filelist/, rtl/, doc/ under output/<top_module>/.
+    """
+    try:
+        proj = parse_project(excel)
+    except Exception as e:
+        click.echo(_ErrorRenderer.render(e), err=True)
+        sys.exit(_exit_code(e))
+
+    generated = generate_project_output(proj, output)
+    for f in generated:
+        click.echo(f"  {f}")
+    click.echo(f"\nGenerated {len(generated)} files in {output}/")
 
 # ---- Exit code helper -----------------------------------------------------
 
