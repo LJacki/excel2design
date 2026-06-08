@@ -10,6 +10,6 @@
     {{ inst.module.name }} {{ inst.instance_name }} (
 {%- endif %}
 {%- for port in inst.ports %}
-        .{{ port.name }}({{ port.connection }}){% if port.comment %}  // {{ port.comment }}{% endif %}
+        .{{ port.name }}({{ port.connection }}){% if not loop.last %},{% endif %}{% if port.comment %}  {{ port.comment }}{% endif %}
 {%- endfor %}
     );

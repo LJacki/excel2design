@@ -345,17 +345,17 @@ def _parse_defines_sheet(ws: Worksheet) -> list[Define]:
 
     # Header row follows the marker
     header_row = marker_row + 1
-    if header_row >= len(rows):
+    if header_row > len(rows):
         return []
-    header_cells = rows[header_row]
+    header_cells = rows[header_row - 1]  # rows is 0-indexed
     header = [str(c.value).strip().lower() if c.value else "" for c in header_cells[:3]]
     expected = ["name", "value", "comment"]
     if header != expected:
-        raise HeaderMismatchError(ws.title, header_row + 1, expected, header)
+        raise HeaderMismatchError(ws.title, header_row, expected, header)
 
     defines: list[Define] = []
-    for r in range(header_row + 1, len(rows)):
-        cells = rows[r]
+    for r in range(header_row + 1, len(rows) + 1):
+        cells = rows[r - 1]  # rows is 0-indexed
         name = str(cells[0].value).strip() if cells[0].value else ""
         if not name or name.startswith("#"):
             continue
