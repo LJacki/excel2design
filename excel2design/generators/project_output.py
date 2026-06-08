@@ -12,6 +12,7 @@ from excel2design.generators.defines import generate_vh, generate_f
 from excel2design.generators.verilog import generate_wrapper
 from excel2design.generators.diagram_html import generate_html
 from excel2design.generators.diagram_svg import generate_svg
+from excel2design.generators.diagram_svg_hierarchy import generate_svg_hierarchy
 from excel2design.generators.diagram_excalidraw import generate_excalidraw
 
 
@@ -77,5 +78,13 @@ def generate_all(project: Project, output_dir: Path | str) -> list[Path]:
             exc_path.write_text(generate_excalidraw(mod), encoding="utf-8")
 
             generated.extend([html_path, svg_path, exc_path])
+
+        # Generate hierarchy diagram if there are submodules
+        if project.hierarchy:
+            hier_svg = generate_svg_hierarchy(project, top_name)
+            if hier_svg:
+                hier_path = doc_dir / f"{top_name}_hierarchy.svg"
+                hier_path.write_text(hier_svg, encoding="utf-8")
+                generated.append(hier_path)
 
     return generated

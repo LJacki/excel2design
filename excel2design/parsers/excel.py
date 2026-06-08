@@ -123,8 +123,14 @@ def _parse_sheet(ws: Worksheet, source_file: Path) -> Optional[Module]:
     if port_marker_row is None:
         raise MarkerMissingError(ws.title, MARKER_PORTS)
 
-    # Validate sheet name as Verilog identifier (used as module name)
-    check_identifier(ws.title, "module (sheet name)", sheet=ws.title, row=0, col=0)
+    # Validate sheet name as Verilog identifier (used as module name).
+    # For dotted names (hierarchy), validate only the last segment.
+    raw_name = ws.title
+    if "." in raw_name:
+        module_name = raw_name.rsplit(".", 1)[-1]
+    else:
+        module_name = raw_name
+    check_identifier(module_name, "module (sheet name)", sheet=ws.title, row=0, col=0)
 
     # ---- Parameter section: header is param_marker_row + 1, data after ----
     param_header_row = param_marker_row + 1
@@ -143,7 +149,7 @@ def _parse_sheet(ws: Worksheet, source_file: Path) -> Optional[Module]:
     _validate_unique_ports(ports, source_sheet=ws.title)
 
     return Module(
-        name=ws.title,
+        name=module_name,  # last segment for dotted names
         ports=ports,
         parameters=parameters,
         source_file=source_file,
