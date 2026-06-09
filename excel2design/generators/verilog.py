@@ -225,9 +225,12 @@ def generate_wrapper(
             lines = []
             if inst.module.parameters:
                 lines.append(f"{inst.module.name} #(")
+                max_pn_p = max(len(p.name) for p in inst.module.parameters)
                 for i, param in enumerate(inst.module.parameters):
-                    comma = "," if i < len(inst.module.parameters) - 1 else ""
-                    lines.append(f"    .{param.name}({param.name}){comma}")
+                    comma = "," if i < len(inst.module.parameters) - 1 else " "
+                    lines.append(
+                        f"    .{param.name:<{max_pn_p + 1}} ({param.name}) {comma}"
+                    )
                 lines.append(f") {inst.instance_name} (")
             else:
                 lines.append(f"{inst.module.name} {inst.instance_name} (")
