@@ -226,10 +226,11 @@ def generate_wrapper(
             if inst.module.parameters:
                 lines.append(f"{inst.module.name} #(")
                 max_pn_p = max(len(p.name) for p in inst.module.parameters)
+                pn_pad = max(max_pn, max_pn_p)  # align ) column with ports
                 for i, param in enumerate(inst.module.parameters):
                     comma = "," if i < len(inst.module.parameters) - 1 else " "
                     lines.append(
-                        f"    .{param.name:<{max_pn_p + 1}} ({param.name:<{max_cn}}) {comma}"
+                        f"    .{param.name:<{pn_pad + 1}} ({param.name:<{max_cn}}) {comma}"
                     )
                 lines.append(f") {inst.instance_name} (")
             else:
