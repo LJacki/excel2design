@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.5-draft
-> 最后更新: 2026-06-04
-> 状态: SPEC §15-20 子模块层次化方案冻结；v0.4 已交付（225 tests）
+> 版本: v0.5.1
+> 最后更新: 2026-06-09
+> 状态: 模糊匹配 / 方向箭头 / 层次图连线 / 层级深度修复 完成；224 tests
 
 ---
 
@@ -1102,9 +1102,18 @@ rtl/u_datapath.v
 
 | 优先级 | 规则 | 示例 |
 |--------|------|------|
-| 1 | 父模块有同名端口 → 直连 | `clk` → `clk` |
-| 2 | 兄弟模块有同名端口 → 生成内部 wire | `data_bus` 连接 u_a ↔ u_b |
+| 1a | 父模块有同名端口 → 直连 | `clk` → `clk` |
+| 1b | 父模块有实例后缀匹配端口 → 直连 | `reg_adc_pd`（instance `adc_a`）→ `reg_adc_pd_a` |
+| 2 | 兄弟模块有同名端口 → 生成内部 wire | `data_bus` 连接 u_a → u_b |
 | 3 | 父模块有同名 parameter → 参数化连接 | `WIDTH` → `#(.WIDTH(WIDTH))` |
+
+### 17.1a 模糊后缀匹配（v0.5.1 新增）
+
+当子模块端口名与父模块端口名不完全相同时，尝试按实例后缀匹配：
+
+- instance `adc_a` 的 `reg_adc_pd` → 匹配父端口 `reg_adc_pd_a`（去掉 `_a` 后相等）
+- instance `adc_b` 的 `reg_adc_pd` → 匹配父端口 `reg_adc_pd_b`
+- 无实例名时尝试所有后缀（`_a/_b/_c/_0/_1/_2/_3`）
 
 **未匹配**：
 - 输出端口 → 悬空 `()` + `// TODO: no matching port`
@@ -1112,15 +1121,18 @@ rtl/u_datapath.v
 
 ### 17.2 位宽不匹配
 
-连接时检测位宽不一致，生成注释：
+连接时检测位宽不一致，生成注释。**不阻断生成**——只标记，留给工程师处理。
+
+### 17.3 内部 wire 生成
+
+内部 wire 从实际连接结果推导（非独立扫描）。只有被 SIBLING_PORT 匹配使用的信号才生成 wire 声明。注释使用方向箭头：
 
 ```verilog
-    .data_bus (data_bus),   // TODO: width mismatch — u_ctrl:[15:0] vs u_datapath:[7:0]
+    wire              reg_cfg_wr_en    ;  // iic_slave → reg_cfg
+    wire [REG_DW-1:0] reg_cfg_wr_data  ;  // iic_slave → reg_cfg
 ```
 
-**不阻断生成**——只标记，留给工程师处理。
-
-### 17.3 生成示例
+### 17.4 生成示例
 
 ```verilog
 module sram_wrapper #(...) (
@@ -1128,22 +1140,35 @@ module sram_wrapper #(...) (
     ...
 );
     // ---------- INTERNAL WIRES ----------
-    wire [SRM_DW-1:0] data_bus;   // connects u_ctrl ↔ u_datapath
+    wire [SRM_DW-1:0] data_bus;   // u_ctrl → u_datapath
 
     // ---------- SUB-MODULES ----------
     u_ctrl u_ctrl (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .data_bus (data_bus),
-        .cfg_in   (cfg_in)         // ← 直连 wrapper port
+        .clk      (clk             ) ,
+        .rst_n    (rst_n           ) ,
+        .data_bus (data_bus        ) ,
+        .cfg_in   (cfg_in          )   // 直连 wrapper port
     );
 
     u_datapath u_datapath (
-        .clk      (clk),
-        .data_bus (data_bus),
-        .result   (result)         // ← 直连 wrapper port
+        .clk      (clk             ) ,
+        .data_bus (data_bus        ) ,
+        .result   (result          )   // 直连 wrapper port
     );
 endmodule
+```
+
+### 17.5 多实例连接（v0.5.1）
+
+同一模块的多个实例（如 `adc_a` 和 `adc_b`）各自通过后缀匹配连接到不同的父端口：
+
+```verilog
+    adc_a adc_a (
+        .reg_adc_pd (reg_adc_pd_a) ,    // ← 模糊匹配 _a 后缀
+    );
+    adc_b adc_b (
+        .reg_adc_pd (reg_adc_pd_b) ,    // ← 模糊匹配 _b 后缀
+    );
 ```
 
 ---
@@ -1171,17 +1196,31 @@ Wrapper 外框内嵌套子模块内框，端口连线：
 | 连线类型 | 视觉 | 示例 |
 |---------|------|------|
 | wrapper port → submodule port | 从 wrapper 边缘穿过到子模块边缘 | `clk` → `u_ctrl.clk` |
-| submodule A → submodule B | 子模块间直接连线 | `u_ctrl.data` → `u_datapath.data_bus` |
+| submodule A → submodule B | 子模块间虚线/箭头，带信号名标签 | `u_ctrl.data` → `u_datapath.data_bus` |
 
-### 18.3 独立框图批量模式
+### 18.3 子模块间连线（v0.5.1 实现）
+
+SVG：灰色虚线 + 信号名标签在中间点。Excalidraw：灰色箭头。只连接兄弟模块间的内部信号（不由父端口中转的）。
+
+### 18.4 独立框图批量模式
 
 `excel2design diagram --all` → 为每个 sheet 独立生成框图，放入 `doc/` 目录。
 
-### 18.4 实现优先级
+### 18.5 层次化图格式
 
-1. **SVG**：原生 `<rect>` + `<line>`，最易实现
-2. **Excalidraw**：矩形+箭头坐标计算，中等复杂度
-3. **HTML**：CSS 嵌套 + inline SVG，复杂度最高（v0.5 可降级为纯列表+连线表）
+| 格式 | 实现 | 文件 |
+|------|------|------|
+| SVG | `diagram_svg_hierarchy.py`（嵌套 rect + 虚线连线） | `{top}_hierarchy.svg` |
+| Excalidraw | `diagram_excalidraw_hierarchy.py`（矩形 + 箭头连线，Comic Shanns 字体） | `{top}_hierarchy.excalidraw` |
+
+### 18.6 层级深度处理（v0.5.1）
+
+`get_submodules(parent, recursive=False)` 只取直属子模块。每个模块的 wrapper 只实例化自己的直接子模块，孙子模块由子模块自己的 wrapper 实例化：
+
+```
+iic_top → iic_slave, reg_cfg, tempsensor_crg, tempsensor
+tempsensor → adc_a, adc_b
+```
 
 ---
 
