@@ -161,18 +161,20 @@ def generate_wrapper(
 
     # v0.5: submodule instances and internal wires (optional)
     sub_instances = []
-    internal_wires = []
+    wire_lines = []
     if project is not None:
         sheet = source_sheet or module.name
         instances = project.get_submodules(sheet)
         wires = collect_internal_wires(project, sheet)
 
-        for w in wires:
-            internal_wires.append({
-                "name": w.name,
-                "width": w.width,
-                "sources": w.sources,
-            })
+        # Format internal wire declarations with column alignment
+        if wires:
+            max_wire_name = max(len(w.name) for w in wires)
+            max_wire_width = max(len(w.width) for w in wires) if any(w.width for w in wires) else 0
+            for w in wires:
+                width_col = f"{w.width:<{max_wire_width + 1}}" if w.width else " " * (max_wire_width + 1)
+                src_note = f"  // connects {' <-> '.join(w.sources)}" if w.sources else ""
+                wire_lines.append(f"    wire {width_col}{w.name:<{max_wire_name}} ;{src_note}")
 
         for inst in instances:
             ports = []
@@ -187,23 +189,32 @@ def generate_wrapper(
                         comment = "// TODO: no matching port"
                 elif not result.width_match:
                     comment = f"// {result.width_note}"
-                ports.append({
-                    "name": p.name,
-                    "connection": conn,
-                    "comment": comment,
-                })
-            # Render the instance
-            inst_env = _setup_env()
-            inst_tpl = inst_env.get_template("partial_instance.j2")
-            inst_render = inst_tpl.render(
-                inst={
-                    "module": inst.module,
-                    "instance_name": inst.instance_name,
-                    "parameters": inst.module.parameters,
-                    "ports": ports,
-                }
-            )
-            sub_instances.append({"render": inst_render})
+                ports.append({"name": p.name, "connection": conn, "comment": comment})
+
+            # Format instance port lines with column alignment
+            max_pn = max(len(p["name"]) for p in ports) if ports else 0
+            max_cn = max(len(p["connection"]) for p in ports) if ports else 0
+            port_lines = []
+            for i, p in enumerate(ports):
+                suffix = "," if i < len(ports) - 1 else " "
+                cmt = f"  {p['comment']}" if p["comment"] else ""
+                port_lines.append(
+                    f"        .{p['name']:<{max_pn + 1}} ({p['connection']:<{max_cn}}) {suffix}{cmt}"
+                )
+
+            # Build the full instance string
+            lines = []
+            if inst.module.parameters:
+                lines.append(f"    {inst.module.name} #(")
+                for i, param in enumerate(inst.module.parameters):
+                    comma = "," if i < len(inst.module.parameters) - 1 else ""
+                    lines.append(f"        .{param.name}({param.name}){comma}")
+                lines.append(f"    ) {inst.instance_name} (")
+            else:
+                lines.append(f"    {inst.module.name} {inst.instance_name} (")
+            lines.extend(port_lines)
+            lines.append("    );")
+            sub_instances.append("\n".join(lines))
 
     return template.render(
         module=module,
@@ -215,6 +226,6 @@ def generate_wrapper(
         inout_lines=_fmt_ports(inout_ports, max_name),
         regs_with_default=regs_with_default,
         always_groups=always_groups,
-        internal_wires=internal_wires,
+        wire_lines=wire_lines,
         sub_instances=sub_instances,
     )

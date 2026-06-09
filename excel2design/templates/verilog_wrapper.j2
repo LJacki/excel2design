@@ -1,5 +1,5 @@
 {# Verilog wrapper template per SPEC §5.
-   v0.4.1: column-aligned ports/params, clean tail, no redundant wire decls. #}
+   v0.5: column-aligned ports/params, internal wires, submodule instances. #}
 // =====================================================
 // Module:    {{ module.name }}
 // Source:    {{ source_file }}{{ " / sheet: " + source_sheet if source_sheet else "" }}
@@ -34,6 +34,13 @@ module {{ module.name }} (
 {%- endfor %}
 {%- endif %}
 );
+{%- if wire_lines %}
+
+    // ---------- INTERNAL WIRES ----------
+{%- for line in wire_lines %}
+{{ line }}
+{%- endfor %}
+{%- endif %}
 {%- if regs_with_default %}
 
     // ---------- INITIAL ----------
@@ -58,18 +65,12 @@ module {{ module.name }} (
     end
 {%- endfor %}
 {%- endif %}
-{%- if internal_wires %}
-
-    // ---------- INTERNAL WIRES ----------
-{%- for w in internal_wires %}
-    wire {{ w.width }} {{ w.name }};{% if w.sources %}  // connects {{ w.sources | join(' <-> ') }}{% endif %}
-{%- endfor %}
-{%- endif %}
 {%- if sub_instances %}
 
     // ---------- SUB-MODULES ----------
-{%- for inst in sub_instances %}
-    {{ inst.render }}
+{%- for inst_str in sub_instances %}
+
+{{ inst_str }}
 {%- endfor %}
 {%- endif %}
 
