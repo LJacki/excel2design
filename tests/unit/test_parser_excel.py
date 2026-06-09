@@ -25,7 +25,51 @@ from excel2design.parsers.excel import get_module, parse_workbook
 
 
 
-def test_parse_sample_xlsx() -> None:
+def _write_sample_sheet(ws):
+    """Write the canonical uart_rx sample data."""
+    params = [
+        ("DATA_WIDTH", 8, 32, "parameter", "数据位宽"),
+        ("FIFO_DEPTH", 16, 32, "parameter", "FIFO 深度"),
+        ("CLK_FREQ_MHZ", 100, 32, "parameter", "时钟频率(MHz)"),
+    ]
+    ports = [
+        ("clk", "input", 1, "wire", "", "", "", 0, 0, "系统时钟"),
+        ("rst_n", "input", 1, "wire", "", "", "", 0, 0, "异步低有效复位"),
+        ("rx_pad", "input", 1, "wire", "", "", "", 0, 0, "串行输入"),
+        ("baud_tick", "input", 1, "wire", "", "", "", 0, 0, "波特率 tick"),
+        ("rx_data", "output", "DATA_WIDTH", "reg", "{DATA_WIDTH{1'b0}}", "clk", "async", 0, 0, "接收数据"),
+        ("rx_valid", "output", 1, "reg", "1'b0", "clk", "async", 0, 0, "接收有效"),
+        ("fifo_full", "output", 1, "reg", "1'b0", "clk", "async", 0, 0, "FIFO 满"),
+        ("fifo_data", "output", "DATA_WIDTH", "reg", "{DATA_WIDTH{1'b0}}", "clk", "async", 1, 0, "FIFO 数据 (signed)"),
+    ]
+    ws.cell(1, 1, "# === PARAMETERS ===")
+    ws.cell(2, 1, "name"); ws.cell(2, 2, "value"); ws.cell(2, 3, "width"); ws.cell(2, 4, "param_type"); ws.cell(2, 5, "comment")
+    for i, row in enumerate(params):
+        for j, val in enumerate(row):
+            if val != "": ws.cell(3 + i, j + 1, val)
+    nr = 3 + len(params)
+    ws.cell(nr + 1, 1, "# === PORTS ===")
+    ws.cell(nr + 2, 1, "name"); ws.cell(nr + 2, 2, "direction"); ws.cell(nr + 2, 3, "width")
+    ws.cell(nr + 2, 4, "type"); ws.cell(nr + 2, 5, "default"); ws.cell(nr + 2, 6, "clock")
+    ws.cell(nr + 2, 7, "reset_type"); ws.cell(nr + 2, 8, "signed"); ws.cell(nr + 2, 9, "interface"); ws.cell(nr + 2, 10, "comment")
+    for i, row in enumerate(ports):
+        for j, val in enumerate(row):
+            if val != "": ws.cell(nr + 3 + i, j + 1, val)
+
+# ---- Sample Excel fixture (generated on-the-fly) ---------------------------
+
+@pytest.fixture(scope="module")
+def sample_xlsx(tmp_path_factory):
+    p = tmp_path_factory.mktemp("fixtures") / "sample.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "uart_rx"
+    _write_sample_sheet(ws)
+    wb.save(p)
+    return p
+
+
+def test_parse_sample_xlsx(sample_xlsx) -> None:
     """The canonical sample should parse cleanly."""
     modules = parse_workbook(sample_xlsx)
     assert len(modules) == 1
@@ -33,7 +77,7 @@ def test_parse_sample_xlsx() -> None:
     assert m.name == "uart_rx"
 
 
-def test_sample_has_3_parameters(), sample_xlsx) -> None:
+def test_sample_has_3_parameters(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     assert len(m.parameters) == 3
@@ -43,13 +87,13 @@ def test_sample_has_3_parameters(), sample_xlsx) -> None:
     assert m.parameters[1].value == "16"
 
 
-def test_sample_has_8_ports(), sample_xlsx) -> None:
+def test_sample_has_8_ports(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     assert len(m.ports) == 8
 
 
-def test_sample_inputs_outputs_classified(), sample_xlsx) -> None:
+def test_sample_inputs_outputs_classified(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     assert len(m.inputs()) == 4
@@ -57,7 +101,7 @@ def test_sample_inputs_outputs_classified(), sample_xlsx) -> None:
     assert len(m.inouts()) == 0
 
 
-def test_sample_clk_is_wire_input(), sample_xlsx) -> None:
+def test_sample_clk_is_wire_input(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     clk = m.ports[0]
@@ -66,7 +110,7 @@ def test_sample_clk_is_wire_input(), sample_xlsx) -> None:
     assert clk.type == SignalType.WIRE
 
 
-def test_sample_rx_data_is_reg_output_param_width(), sample_xlsx) -> None:
+def test_sample_rx_data_is_reg_output_param_width(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     rx_data = next(p for p in m.ports if p.name == "rx_data")
@@ -78,14 +122,14 @@ def test_sample_rx_data_is_reg_output_param_width(), sample_xlsx) -> None:
     assert rx_data.default == "{DATA_WIDTH{1'b0}}"
 
 
-def test_sample_fifo_data_signed(), sample_xlsx) -> None:
+def test_sample_fifo_data_signed(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
     fifo_data = next(p for p in m.ports if p.name == "fifo_data")
     assert fifo_data.signed is True
 
 
-def test_sample_preserves_excel_order(), sample_xlsx) -> None:
+def test_sample_preserves_excel_order(sample_xlsx) -> None:
     """Per SPEC §3.5.4, port order must match Excel row order."""
     modules = parse_workbook(sample_xlsx)
     m = modules[0]
@@ -96,13 +140,13 @@ def test_sample_preserves_excel_order(), sample_xlsx) -> None:
     assert [p.name for p in m.ports] == expected
 
 
-def test_get_module_works(), sample_xlsx) -> None:
+def test_get_module_works(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     m = get_module(modules, "uart_rx")
     assert m.name == "uart_rx"
 
 
-def test_get_module_missing_raises(), sample_xlsx) -> None:
+def test_get_module_missing_raises(sample_xlsx) -> None:
     modules = parse_workbook(sample_xlsx)
     with pytest.raises(ModuleNotFoundError) as exc_info:
         get_module(modules, "axi_crossbar")
@@ -345,7 +389,7 @@ def test_empty_port_section(tmp_path: Path) -> None:
     assert len(modules[0].parameters) == 1
 
 
-def test_no_diff_on_repeat(tmp_path: Path), sample_xlsx) -> None:
+def test_no_diff_on_repeat(sample_xlsx, tmp_path: Path) -> None:
     """Parsing the same file twice should give identical objects."""
     a = parse_workbook(sample_xlsx)
     b = parse_workbook(sample_xlsx)
