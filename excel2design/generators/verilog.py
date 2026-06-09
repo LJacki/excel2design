@@ -206,7 +206,7 @@ def generate_wrapper(
                 drivers_str = ", ".join(info["drivers"])
                 sinks_str = ", ".join(info["sinks"])
                 note = f"  // {drivers_str} → {sinks_str}" if drivers_str and sinks_str else ""
-                wire_lines.append(f"    wire {wcol}{name:<{max_wn}} ;{note}")
+                wire_lines.append(f"wire {wcol}{name:<{max_wn}} ;{note}")
 
         # Generate instance blocks
         for conn_data in all_connections:
@@ -224,15 +224,15 @@ def generate_wrapper(
 
             lines = []
             if inst.module.parameters:
-                lines.append(f"    {inst.module.name} #(")
+                lines.append(f"{inst.module.name} #(")
                 for i, param in enumerate(inst.module.parameters):
                     comma = "," if i < len(inst.module.parameters) - 1 else ""
-                    lines.append(f"        .{param.name}({param.name}){comma}")
-                lines.append(f"    ) {inst.instance_name} (")
+                    lines.append(f"    .{param.name}({param.name}){comma}")
+                lines.append(f") {inst.instance_name} (")
             else:
-                lines.append(f"    {inst.module.name} {inst.instance_name} (")
+                lines.append(f"{inst.module.name} {inst.instance_name} (")
             lines.extend(port_lines)
-            lines.append("    );")
+            lines.append(");")
             sub_instances.append("\n".join(lines))
 
     return template.render(

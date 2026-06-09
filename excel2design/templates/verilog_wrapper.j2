@@ -1,5 +1,4 @@
-{# Verilog wrapper template per SPEC §5.
-   v0.5: column-aligned ports/params, internal wires, submodule instances. #}
+{# Verilog wrapper template v0.5.1: ports indented, everything else flush-left. #}
 // =====================================================
 // Module:    {{ module.name }}
 // Source:    {{ source_file }}{{ " / sheet: " + source_sheet if source_sheet else "" }}
@@ -36,38 +35,38 @@ module {{ module.name }} (
 );
 {%- if wire_lines %}
 
-    // ---------- INTERNAL WIRES ----------
+// ---------- INTERNAL WIRES ----------
 {%- for line in wire_lines %}
 {{ line }}
 {%- endfor %}
 {%- endif %}
 {%- if regs_with_default %}
 
-    // ---------- INITIAL ----------
-    initial begin
+// ---------- INITIAL ----------
+initial begin
 {%- for reg in regs_with_default %}
-        {{ reg.name }} = {{ reg.default }};
+    {{ reg.name }} = {{ reg.default }};
 {%- endfor %}
-    end
+end
 {%- endif %}
 {%- if always_groups %}
 {%- for group in always_groups %}
 
-    // ---------- {{ group.label }} ----------
-    always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
-        if (!rst_n) begin
+// ---------- {{ group.label }} ----------
+always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
+    if (!rst_n) begin
 {%- for reg in group.regs %}
-            {{ reg.name }} <= {{ reg.default }};
+        {{ reg.name }} <= {{ reg.default }};
 {%- endfor %}
-        end else begin
-            // TODO: drive these regs
-        end
+    end else begin
+        // TODO: drive these regs
     end
+end
 {%- endfor %}
 {%- endif %}
 {%- if sub_instances %}
 
-    // ---------- SUB-MODULES ----------
+// ---------- SUB-MODULES ----------
 {%- for inst_str in sub_instances %}
 
 {{ inst_str }}

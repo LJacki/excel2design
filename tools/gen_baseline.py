@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures"
 EXPECTED_DIR = FIXTURE_DIR / "expected"
 
-FIXTURES = ["uart_rx", "axi_crossbar", "multi_clock", "empty_ports"]
+FIXTURES = ["uart_rx", "axi_crossbar", "multi_clock", "empty_ports", "hierarchy_2level"]
 
 
 def module_to_dict(m: Module) -> dict[str, Any]:
@@ -82,13 +82,13 @@ def main() -> int:
             print(f"SKIP: {path} not found (run tools/gen_fixtures.py first)")
             continue
         modules = parse_workbook(path)
-        assert len(modules) == 1, f"{name}: expected 1 module, got {len(modules)}"
-        data = module_to_dict(modules[0])
+        data = [module_to_dict(m) for m in modules]
         out = EXPECTED_DIR / f"{name}.json"
         with out.open("w", encoding="utf-8", newline="\n") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=False)
             f.write("\n")  # trailing newline for byte-stability
-        print(f"Wrote {out} ({len(data['ports'])} ports)")
+        mod_names = ", ".join(m.name for m in modules)
+        print(f"Wrote {out} ({len(modules)} modules: {mod_names})")
 
     return 0
 

@@ -106,8 +106,8 @@ def test_signed_keyword_present() -> None:
     # fifo_data is signed
     assert "signed" in v
     # Should appear in the port list for fifo_data
-    assert re.search(r"output\s+signed\s+reg\s+\[DATA_WIDTH-1:0\]\s+fifo_data", v), (
-        "fifo_data should be declared with 'signed reg' and parameterised width"
+    assert re.search(r"output\s+reg\s{2}signed\s+\[DATA_WIDTH-1:0\]\s+fifo_data", v), (
+        "fifo_data should be declared with 'reg signed' and parameterised width"
     )
 
 

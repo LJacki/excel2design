@@ -1,0 +1,255 @@
+[
+  {
+    "name": "top",
+    "source_sheet": "top",
+    "parameters": [
+      {
+        "name": "W",
+        "value": "8",
+        "width": null,
+        "param_type": "parameter",
+        "comment": null
+      }
+    ],
+    "ports": [
+      {
+        "name": "clk",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "rst_n",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "din",
+        "direction": "input",
+        "width": {
+          "raw": "W",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "dout",
+        "direction": "output",
+        "width": {
+          "raw": "W",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "valid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      }
+    ]
+  },
+  {
+    "name": "u_a",
+    "source_sheet": "top.u_a",
+    "parameters": [
+      {
+        "name": "W",
+        "value": "8",
+        "width": null,
+        "param_type": "parameter",
+        "comment": null
+      }
+    ],
+    "ports": [
+      {
+        "name": "clk",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "rst_n",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "din_u",
+        "direction": "input",
+        "width": {
+          "raw": "W",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "dout",
+        "direction": "output",
+        "width": {
+          "raw": "W",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      }
+    ]
+  },
+  {
+    "name": "u_b",
+    "source_sheet": "top.u_b",
+    "parameters": [
+      {
+        "name": "W",
+        "value": "8",
+        "width": null,
+        "param_type": "parameter",
+        "comment": null
+      }
+    ],
+    "ports": [
+      {
+        "name": "clk",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "rst_n",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "din",
+        "direction": "input",
+        "width": {
+          "raw": "W",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      },
+      {
+        "name": "valid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
+      }
+    ]
+  }
+]

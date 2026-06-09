@@ -20,7 +20,7 @@ from excel2design.parsers.excel import parse_workbook
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
 EXPECTED_DIR = FIXTURE_DIR / "expected"
 
-FIXTURES = ["uart_rx", "axi_crossbar", "multi_clock", "empty_ports"]
+FIXTURES = ["uart_rx", "axi_crossbar", "multi_clock", "empty_ports", "hierarchy_2level"]
 
 
 def module_to_dict(m: Module) -> dict[str, Any]:
@@ -69,8 +69,7 @@ def test_golden_baseline(fixture_name: str) -> None:
     assert expected.exists(), f"Missing baseline: {expected}"
 
     modules = parse_workbook(xlsx)
-    assert len(modules) == 1, f"{fixture_name}: expected 1 module, got {len(modules)}"
-    actual = module_to_dict(modules[0])
+    actual = [module_to_dict(m) for m in modules]
     actual_json = json.dumps(actual, indent=2, ensure_ascii=False, sort_keys=False) + "\n"
 
     expected_json = expected.read_text(encoding="utf-8")

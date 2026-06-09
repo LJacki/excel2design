@@ -1,516 +1,518 @@
-{
-  "name": "axi_crossbar",
-  "source_sheet": "axi_crossbar",
-  "parameters": [
-    {
-      "name": "ADDR_WIDTH",
-      "value": "32",
-      "width": "32",
-      "param_type": "parameter",
-      "comment": "地址位宽"
-    },
-    {
-      "name": "DATA_WIDTH",
-      "value": "64",
-      "width": "32",
-      "param_type": "parameter",
-      "comment": "数据位宽"
-    },
-    {
-      "name": "ID_WIDTH",
-      "value": "4",
-      "width": "32",
-      "param_type": "parameter",
-      "comment": "ID 位宽"
-    },
-    {
-      "name": "NUM_SLAVES",
-      "value": "4",
-      "width": "32",
-      "param_type": "parameter",
-      "comment": "从机数量"
-    }
-  ],
-  "ports": [
-    {
-      "name": "aclk",
-      "direction": "input",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+[
+  {
+    "name": "axi_crossbar",
+    "source_sheet": "axi_crossbar",
+    "parameters": [
+      {
+        "name": "ADDR_WIDTH",
+        "value": "32",
+        "width": "32",
+        "param_type": "parameter",
+        "comment": "地址位宽"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "AXI 时钟"
-    },
-    {
-      "name": "aresetn",
-      "direction": "input",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "DATA_WIDTH",
+        "value": "64",
+        "width": "32",
+        "param_type": "parameter",
+        "comment": "数据位宽"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "AXI 复位"
-    },
-    {
-      "name": "s_axi_awid",
-      "direction": "input",
-      "width": {
-        "raw": "ID_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "ID_WIDTH",
+        "value": "4",
+        "width": "32",
+        "param_type": "parameter",
+        "comment": "ID 位宽"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awaddr",
-      "direction": "input",
-      "width": {
-        "raw": "ADDR_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "NUM_SLAVES",
+        "value": "4",
+        "width": "32",
+        "param_type": "parameter",
+        "comment": "从机数量"
+      }
+    ],
+    "ports": [
+      {
+        "name": "aclk",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "AXI 时钟"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awlen",
-      "direction": "input",
-      "width": {
-        "raw": "8",
-        "msb": 7,
-        "is_parameter": false
+      {
+        "name": "aresetn",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "AXI 复位"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awsize",
-      "direction": "input",
-      "width": {
-        "raw": "3",
-        "msb": 2,
-        "is_parameter": false
+      {
+        "name": "s_axi_awid",
+        "direction": "input",
+        "width": {
+          "raw": "ID_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awburst",
-      "direction": "input",
-      "width": {
-        "raw": "2",
-        "msb": 1,
-        "is_parameter": false
+      {
+        "name": "s_axi_awaddr",
+        "direction": "input",
+        "width": {
+          "raw": "ADDR_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awvalid",
-      "direction": "input",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_awlen",
+        "direction": "input",
+        "width": {
+          "raw": "8",
+          "msb": 7,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_wdata",
-      "direction": "input",
-      "width": {
-        "raw": "DATA_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "s_axi_awsize",
+        "direction": "input",
+        "width": {
+          "raw": "3",
+          "msb": 2,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_wstrb",
-      "direction": "input",
-      "width": {
-        "raw": "DATA_WIDTH/8",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "s_axi_awburst",
+        "direction": "input",
+        "width": {
+          "raw": "2",
+          "msb": 1,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awready",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_awvalid",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_wready",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_wdata",
+        "direction": "input",
+        "width": {
+          "raw": "DATA_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_bvalid",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_wstrb",
+        "direction": "input",
+        "width": {
+          "raw": "DATA_WIDTH/8",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_bresp",
-      "direction": "output",
-      "width": {
-        "raw": "2",
-        "msb": 1,
-        "is_parameter": false
+      {
+        "name": "s_axi_awready",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "2'b00",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_arready",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_wready",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_rvalid",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_bvalid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_rdata",
-      "direction": "output",
-      "width": {
-        "raw": "DATA_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "s_axi_bresp",
+        "direction": "output",
+        "width": {
+          "raw": "2",
+          "msb": 1,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "2'b00",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "{DATA_WIDTH{1'b0}}",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": true,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_rresp",
-      "direction": "output",
-      "width": {
-        "raw": "2",
-        "msb": 1,
-        "is_parameter": false
+      {
+        "name": "s_axi_arready",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "2'b00",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_rlast",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_rvalid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_awid",
-      "direction": "output",
-      "width": {
-        "raw": "ID_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "s_axi_rdata",
+        "direction": "output",
+        "width": {
+          "raw": "DATA_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "reg",
+        "default": "{DATA_WIDTH{1'b0}}",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": true,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "{ID_WIDTH{1'b0}}",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_awaddr",
-      "direction": "output",
-      "width": {
-        "raw": "ADDR_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "s_axi_rresp",
+        "direction": "output",
+        "width": {
+          "raw": "2",
+          "msb": 1,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "2'b00",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "{ADDR_WIDTH{1'b0}}",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_awvalid",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_rlast",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_wdata",
-      "direction": "output",
-      "width": {
-        "raw": "DATA_WIDTH",
-        "msb": null,
-        "is_parameter": true
+      {
+        "name": "m_axi_awid",
+        "direction": "output",
+        "width": {
+          "raw": "ID_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "reg",
+        "default": "{ID_WIDTH{1'b0}}",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "{DATA_WIDTH{1'b0}}",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_wvalid",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "m_axi_awaddr",
+        "direction": "output",
+        "width": {
+          "raw": "ADDR_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "reg",
+        "default": "{ADDR_WIDTH{1'b0}}",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "m_axi_bready",
-      "direction": "output",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "m_axi_awvalid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "reg",
-      "default": "1'b0",
-      "clock": "aclk",
-      "reset_type": "async",
-      "signed": false,
-      "is_interface": false,
-      "comment": null
-    },
-    {
-      "name": "s_axi_awuser",
-      "direction": "inout",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "m_axi_wdata",
+        "direction": "output",
+        "width": {
+          "raw": "DATA_WIDTH",
+          "msb": null,
+          "is_parameter": true
+        },
+        "type": "reg",
+        "default": "{DATA_WIDTH{1'b0}}",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "user signal"
-    },
-    {
-      "name": "s_axi_aruser",
-      "direction": "inout",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "m_axi_wvalid",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "user signal"
-    },
-    {
-      "name": "s_axi_buser",
-      "direction": "inout",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "m_axi_bready",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "aclk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": null
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "user signal"
-    },
-    {
-      "name": "s_axi_ruser",
-      "direction": "inout",
-      "width": {
-        "raw": "1",
-        "msb": 0,
-        "is_parameter": false
+      {
+        "name": "s_axi_awuser",
+        "direction": "inout",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "user signal"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "user signal"
-    },
-    {
-      "name": "debug",
-      "direction": "inout",
-      "width": {
-        "raw": "8",
-        "msb": 7,
-        "is_parameter": false
+      {
+        "name": "s_axi_aruser",
+        "direction": "inout",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "user signal"
       },
-      "type": "wire",
-      "default": null,
-      "clock": null,
-      "reset_type": "sync",
-      "signed": false,
-      "is_interface": false,
-      "comment": "debug bus"
-    }
-  ]
-}
+      {
+        "name": "s_axi_buser",
+        "direction": "inout",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "user signal"
+      },
+      {
+        "name": "s_axi_ruser",
+        "direction": "inout",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "user signal"
+      },
+      {
+        "name": "debug",
+        "direction": "inout",
+        "width": {
+          "raw": "8",
+          "msb": 7,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "debug bus"
+      }
+    ]
+  }
+]
