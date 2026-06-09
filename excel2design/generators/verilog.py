@@ -229,7 +229,7 @@ def generate_wrapper(
                 for i, param in enumerate(inst.module.parameters):
                     comma = "," if i < len(inst.module.parameters) - 1 else " "
                     lines.append(
-                        f"    .{param.name:<{max_pn_p + 1}} ({param.name}) {comma}"
+                        f"    .{param.name:<{max_pn_p + 1}} ({param.name:<{max_cn}}) {comma}"
                     )
                 lines.append(f") {inst.instance_name} (")
             else:
