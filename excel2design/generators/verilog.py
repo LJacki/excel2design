@@ -165,21 +165,14 @@ def generate_wrapper(
     if project is not None:
         sheet = source_sheet or module.name
         instances = project.get_submodules(sheet, recursive=False)
-        wires = collect_internal_wires(project, sheet)
 
-        # Format internal wire declarations with column alignment
-        if wires:
-            max_wire_name = max(len(w.name) for w in wires)
-            max_wire_width = max(len(w.width) for w in wires) if any(w.width for w in wires) else 0
-            for w in wires:
-                width_col = f"{w.width:<{max_wire_width + 1}}" if w.width else " " * (max_wire_width + 1)
-                src_note = f"  // connects {' <-> '.join(w.sources)}" if w.sources else ""
-                wire_lines.append(f"    wire {width_col}{w.name:<{max_wire_name}} ;{src_note}")
+        # First pass: compute all connections, tracking sibling wires
+        all_connections: list[dict] = []  # per-instance port connections
+        sibling_wires: dict[str, dict] = {}  # port_name -> {drivers: [...], sinks: [...]}
 
         for inst in instances:
-            ports = []
-            # Build sibling module list for internal wire matching
             sibling_mods = [inst2.module for inst2 in instances if inst2 != inst]
+            ports = []
             for p in inst.module.ports:
                 result = match_port(p, module, sibling_mods, inst.instance_name)
                 conn = result.target_name if result.kind != ConnectionKind.UNCONNECTED else ""
@@ -191,9 +184,32 @@ def generate_wrapper(
                         comment = "// TODO: no matching port"
                 elif not result.width_match:
                     comment = f"// {result.width_note}"
+                elif result.kind == ConnectionKind.SIBLING_PORT:
+                    # Track sibling wire — determine if driver or sink
+                    if p.direction.value == "output":
+                        sibling_wires.setdefault(p.name, {"drivers": [], "sinks": [], "width": p.width.to_verilog()})
+                        sibling_wires[p.name]["drivers"].append(inst.instance_name)
+                    else:
+                        sibling_wires.setdefault(p.name, {"drivers": [], "sinks": [], "width": p.width.to_verilog()})
+                        sibling_wires[p.name]["sinks"].append(inst.instance_name)
                 ports.append({"name": p.name, "connection": conn, "comment": comment})
+            all_connections.append({"inst": inst, "ports": ports})
 
-            # Format instance port lines with column alignment
+        # Generate internal wire declarations from actual connections
+        if sibling_wires:
+            max_wn = max(len(n) for n in sibling_wires)
+            max_ww = max(len(w["width"]) for w in sibling_wires.values()) if any(w["width"] for w in sibling_wires.values()) else 0
+            for name, info in sibling_wires.items():
+                wcol = f"{info['width']:<{max_ww + 1}}" if info["width"] else " " * (max_ww + 1)
+                drivers_str = ", ".join(info["drivers"])
+                sinks_str = ", ".join(info["sinks"])
+                note = f"  // {drivers_str} → {sinks_str}" if drivers_str and sinks_str else ""
+                wire_lines.append(f"    wire {wcol}{name:<{max_wn}} ;{note}")
+
+        # Generate instance blocks
+        for conn_data in all_connections:
+            inst = conn_data["inst"]
+            ports = conn_data["ports"]
             max_pn = max(len(p["name"]) for p in ports) if ports else 0
             max_cn = max(len(p["connection"]) for p in ports) if ports else 0
             port_lines = []
@@ -204,7 +220,6 @@ def generate_wrapper(
                     f"        .{p['name']:<{max_pn + 1}} ({p['connection']:<{max_cn}}) {suffix}{cmt}"
                 )
 
-            # Build the full instance string
             lines = []
             if inst.module.parameters:
                 lines.append(f"    {inst.module.name} #(")
