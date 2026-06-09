@@ -4,7 +4,7 @@
 Run from repo root:
     python tools/gen_sample.py
 
-Output: examples/sample_module.xlsx
+Output: examples/sample_module_uart_rx.xlsx
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_PATH = REPO_ROOT / "examples" / "sample_module.xlsx"
+OUTPUT_PATH = REPO_ROOT / "examples" / "sample_module_uart_rx.xlsx"
 
 # ---- Styling helpers ------------------------------------------------------
 
