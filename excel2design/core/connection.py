@@ -42,6 +42,7 @@ def match_port(
     port: Port,
     parent_module: Module,
     sibling_modules: list[Module],
+    instance_name: str = "",
 ) -> ConnectionResult:
     """Match a submodule port to a connection target.
 
@@ -49,10 +50,12 @@ def match_port(
       1. Parent module has a port with the same name
       2. A sibling module has a port with the same name
       3. Parent module has a parameter with the same name
+
+    instance_name: used for fuzzy suffix matching (e.g. adc_a → prefer _a).
     """
-    # Priority 1: parent port
+    # Priority 1: parent port (exact match, then fuzzy with instance suffix)
     for parent_port in parent_module.ports:
-        if parent_port.name == port.name:
+        if parent_port.name == port.name or _fuzzy_match(parent_port.name, port.name, instance_name):
             wm = _check_width(port, parent_port)
             return ConnectionResult(
                 kind=ConnectionKind.PARENT_PORT,
@@ -131,6 +134,25 @@ def _check_width(a: Port, b: Port) -> tuple[bool, str]:
     if wa == wb:
         return True, ""
     return False, f"width mismatch — {a.name}:{wa} vs {b.name}:{wb}"
+
+
+def _fuzzy_match(parent_name: str, child_name: str, instance: str = "") -> bool:
+    """Check if parent port name matches child port after stripping
+    instance suffix. When instance is given (e.g. adc_a), only try
+    that specific suffix."""
+    import re
+    if parent_name == child_name:
+        return True
+    if instance and "_" in instance:
+        suffix = "_" + instance.rsplit("_", 1)[-1]
+        base = re.sub(re.escape(suffix) + "$", "", parent_name)
+        if base == child_name:
+            return True
+    else:
+        for pat in [r"_a$", r"_b$", r"_c$", r"_d$", r"_0$", r"_1$", r"_2$", r"_3$"]:
+            if re.sub(pat, "", parent_name) == child_name:
+                return True
+    return False
 
 
 def _widest_port(conns: list[tuple[str, Port]]) -> str:
