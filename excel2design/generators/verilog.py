@@ -102,18 +102,18 @@ def _fmt_params(params) -> list[str]:
     max_name = max(len(p.name) for p in params)
     max_val = max(len(str(p.value)) for p in params)
     lines = []
-    for p in params:
+    for i, p in enumerate(params):
+        suffix = "," if i < len(params) - 1 else ""
         if p.width:
-            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {str(p.value):<{max_val}},")
+            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {str(p.value):<{max_val}}{suffix}")
         else:
-            lines.append(f"    parameter {p.name:<{max_name}} = {str(p.value):<{max_val}},")
+            lines.append(f"    parameter {p.name:<{max_name}} = {str(p.value):<{max_val}}{suffix}")
     return lines
 
 
-def _fmt_ports(ports: list[Port], max_name: int) -> list[str]:
+def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) -> list[str]:
     """Return column-aligned port declaration lines.
-
-    Columns: direction(7) signed(7) type(5) width(w) name({max_name}) ,comment
+    is_last_group: True if no more port groups follow (outputs after inputs, etc.)
     """
     if not ports:
         return []
@@ -121,14 +121,16 @@ def _fmt_ports(ports: list[Port], max_name: int) -> list[str]:
     max_width = max(len(w) for w in width_strs) if width_strs else 0
 
     lines = []
-    for p in ports:
+    for i, p in enumerate(ports):
         w = p.width.to_verilog()
         direction = f"{p.direction.value:<7}"
-        signed = f"{'signed':<7}" if p.signed else " " * 7
         typ = f"{p.type.value:<5}"
+        signed = f"{'signed':<7}" if p.signed else " " * 7
         width_col = f"{w:<{max_width}}" if w else " " * max_width
         comment = f"  // {p.comment}" if p.comment else ""
-        lines.append(f"    {direction}{signed}{typ}{width_col} {p.name:<{max_name}},{comment}")
+        is_last_overall = is_last_group and (i == len(ports) - 1)
+        suffix = "" if is_last_overall else ","
+        lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{suffix}{comment}")
     return lines
 
 
@@ -238,9 +240,9 @@ def generate_wrapper(
         source_file=str(source_file) if source_file else "",
         source_sheet=source_sheet or module.source_sheet or "",
         param_lines=_fmt_params(module.parameters),
-        input_lines=_fmt_ports(input_ports, max_name),
-        output_lines=_fmt_ports(output_ports, max_name),
-        inout_lines=_fmt_ports(inout_ports, max_name),
+        input_lines=_fmt_ports(input_ports, max_name, is_last_group=not bool(output_ports or inout_ports)),
+        output_lines=_fmt_ports(output_ports, max_name, is_last_group=not bool(inout_ports)),
+        inout_lines=_fmt_ports(inout_ports, max_name, is_last_group=True),
         regs_with_default=regs_with_default,
         always_groups=always_groups,
         wire_lines=wire_lines,
