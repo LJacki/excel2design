@@ -1,8 +1,8 @@
 # excel2design — 设计规格书
 
-> 版本: v0.5.1
+> 版本: v0.5.2
 > 最后更新: 2026-06-09
-> 状态: 模糊匹配 / 方向箭头 / 层次图连线 / 层级深度修复 完成；224 tests
+> 状态: §17.6 instance 列对齐规范 + 226 tests
 
 ---
 
@@ -1169,6 +1169,51 @@ endmodule
     adc_b adc_b (
         .reg_adc_pd (reg_adc_pd_b) ,    // ← 模糊匹配 _b 后缀
     );
+```
+
+### 17.6 Instance 格式规范（column alignment）
+
+Instance 的 param 行和 port 行必须遵守统一列对齐规则，保证 `)` 和 `,` 竖直对齐：
+
+**规则**：
+1. `.name` 列宽取 `pn_pad = max(max_port_name, max_param_name)`，统一 param 和 port 的 name 列起始
+2. 左括号 `(` 前统一一个空格
+3. value/connection 列统一按 `max_connection_name` 填充，保证 `)` 在同一列
+4. `) ` + 逗号 的格式一致（最后一个元素空格代替逗号）
+
+**示例**（带 param 的实例）：
+```verilog
+iic_slave #(
+    .REG_AW            (REG_AW          ) ,
+    .REG_DW            (REG_DW          )  
+) iic_slave (
+    .clk               (clk             ) ,
+    .rst_n             (rst_n           ) ,
+    .iic_scl_in        (iic_scl_in      ) ,
+    .iic_scl_oe        (iic_scl_oe      ) ,
+    .iic_slave_busy    (                ) ,  // TODO: no matching port
+    .reg_cfg_wr_en     (reg_cfg_wr_en   ) ,
+    .reg_cfg_addr      (reg_cfg_addr    ) ,
+    .reg_cfg_wr_data   (reg_cfg_wr_data ) ,
+    .reg_cfg_rd_en     (reg_cfg_rd_en   ) ,
+    .reg_cfg_rd_valid  (reg_cfg_rd_valid) ,
+    .reg_cfg_rd_data   (reg_cfg_rd_data )  
+);
+```
+
+**实现**（verilog.py）：
+```python
+pn_pad = max(max_pn, max_pn_p)  # max of port-name and param-name widths
+f"    .{name:<{pn_pad + 1}} ({value:<{max_cn}}) {comma}"
+```
+
+**无 param 的实例**：
+```verilog
+u_ctrl u_ctrl (
+    .clk      (clk      ) ,
+    .data_bus (data_bus ) ,
+    .cfg_in   (cfg_in   )  
+);
 ```
 
 ---
