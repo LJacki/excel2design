@@ -178,8 +178,10 @@ def generate_wrapper(
 
         for inst in instances:
             ports = []
+            # Build sibling module list for internal wire matching
+            sibling_mods = [inst2.module for inst2 in instances if inst2 != inst]
             for p in inst.module.ports:
-                result = match_port(p, module, [])
+                result = match_port(p, module, sibling_mods)
                 conn = result.target_name if result.kind != ConnectionKind.UNCONNECTED else ""
                 comment = ""
                 if result.kind == ConnectionKind.UNCONNECTED:
