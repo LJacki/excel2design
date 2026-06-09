@@ -1,0 +1,142 @@
+"""Hierarchical Excalidraw block diagram generator (v0.5, SPEC §18).
+
+Draws wrapper rectangle with nested submodule rectangles and connection arrows.
+"""
+
+from __future__ import annotations
+
+import json
+
+from excel2design.core.models import Module, Project, Port
+from excel2design.utils.clock_colors import clock_color
+
+
+FONT_FAMILY = 4   # Comic Shanns
+FONT_SIZE = 16
+TITLE_SIZE = 20
+
+COLOR_ARROW_IN = "#2E86C1"
+COLOR_ARROW_OUT = "#E74C3C"
+COLOR_ARROW_WIRE = "#888888"
+COLOR_STROKE = "#888888"
+COLOR_SUB_STROKE = "#BBBBBB"
+
+
+def _base(eid: str, etype: str, x: int, y: int, w: int, h: int,
+          seed: int, sw: int = 1, roughness: int = 1) -> dict:
+    return {
+        "type": etype, "version": 1, "versionNonce": 0,
+        "isDeleted": False, "id": eid,
+        "fillStyle": "hachure", "strokeWidth": sw,
+        "strokeStyle": "solid", "roughness": roughness,
+        "opacity": 100, "angle": 0,
+        "x": x, "y": y, "width": w, "height": h,
+        "seed": seed, "groupIds": [], "frameId": None,
+        "roundness": {"type": 3} if etype == "rectangle" else None,
+        "boundElements": [], "updated": 1, "link": None, "locked": False,
+    }
+
+
+def _rect(eid: str, x: int, y: int, w: int, h: int, seed: int,
+          color: str = COLOR_STROKE) -> dict:
+    el = _base(eid, "rectangle", x, y, w, h, seed, sw=2)
+    el["strokeColor"] = color
+    return el
+
+
+def _text(eid: str, txt: str, x: int, y: int, w: int, seed: int,
+          fs: int = FONT_SIZE, align: str = "left") -> dict:
+    el = _base(eid, "text", x, y, w, 25, seed, sw=1, roughness=0)
+    el.update(fontSize=fs, fontFamily=FONT_FAMILY, text=txt,
+              textAlign=align, verticalAlign="top",
+              containerId=None, originalText=txt, lineHeight=1.25)
+    return el
+
+
+def _arrow(eid: str, x: int, y: int, length: int, seed: int,
+           color: str) -> dict:
+    el = _base(eid, "arrow", x, y, length, 1, seed, sw=1, roughness=0)
+    el.update(points=[[0, 0], [length, 0]], startArrowhead=None,
+              endArrowhead="arrow", strokeColor=color,
+              roundness={"type": 2})
+    return el
+
+
+def generate_excalidraw_hierarchy(project: Project, top_sheet: str) -> str:
+    top_mod = project.modules.get(top_sheet)
+    if top_mod is None:
+        return ""
+
+    instances = project.get_submodules(top_sheet)
+    n_inst = len(instances)
+
+    # Layout
+    sub_w = 220
+    sub_h = max(max(len(inst.module.ports) * 18 + 40 for inst in instances), 80) if instances else 80
+    cols = min(n_inst, 3) if n_inst > 0 else 1
+    rows = (n_inst + cols - 1) // cols if n_inst > 0 else 1
+    inner_w = cols * (sub_w + 30) + 10
+    inner_h = rows * (sub_h + 30) + 40
+    wrapper_w = inner_w + 80
+    wrapper_h = max(inner_h + 80, max(len(top_mod.inputs()), len(top_mod.outputs())) * 22 + 40)
+
+    wrap_x, wrap_y = 350, 200
+    seed = 100000
+
+    elements = []
+
+    # Wrapper title
+    elements.append(_text("t-title", top_mod.name,
+                          wrap_x + 10, wrap_y - 30, 300, seed, TITLE_SIZE, "left"))
+
+    # Wrapper rect
+    elements.append(_rect("r-wrap", wrap_x, wrap_y, wrapper_w, wrapper_h, seed + 1))
+
+    # Input ports left
+    for i, p in enumerate(top_mod.inputs()):
+        py = wrap_y + 40 + i * 22
+        color = clock_color(p.clock, is_input=True)
+        elements.append(_text(f"t-in-{i}", p.name, wrap_x - 100, py, 90, seed + 10 + i, align="right"))
+        elements.append(_arrow(f"a-in-{i}", wrap_x - 40, py + 8, 40, seed + 100 + i, color))
+
+    # Output ports right
+    for i, p in enumerate(top_mod.outputs()):
+        py = wrap_y + 40 + i * 22
+        color = clock_color(p.clock, is_input=False)
+        elements.append(_text(f"t-out-{i}", p.name, wrap_x + wrapper_w + 10, py, 90, seed + 500 + i))
+        elements.append(_arrow(f"a-out-{i}", wrap_x + wrapper_w, py + 8, 40, seed + 600 + i, color))
+
+    # Submodules
+    for idx, inst in enumerate(instances):
+        row = idx // cols
+        col = idx % cols
+        sx = wrap_x + 20 + col * (sub_w + 30)
+        sy = wrap_y + 40 + row * (sub_h + 30)
+
+        elements.append(_rect(f"r-sub-{idx}", sx, sy, sub_w, sub_h, seed + 1000 + idx, COLOR_SUB_STROKE))
+        elements.append(_text(f"t-sub-{idx}", inst.instance_name,
+                              sx + 10, sy + 4, sub_w - 20, seed + 2000 + idx, FONT_SIZE, "center"))
+
+        # Submodule ports
+        for pi, p in enumerate(inst.module.ports):
+            py = sy + 24 + pi * 18
+            if py > sy + sub_h - 10:
+                break
+            color = clock_color(p.clock, is_input=(p.direction.value == "input"))
+            dir_char = "←" if p.direction.value == "input" else "→"
+            if p.direction.value == "input":
+                label = f"{dir_char} {p.name}"
+                tx = sx + 4
+            else:
+                label = f"{p.name} {dir_char}"
+                tx = sx + sub_w - 120
+            elements.append(_text(f"t-sp-{idx}-{pi}", label, tx, py, 120, seed + 3000 + idx * 100 + pi, 12))
+
+    scene = {
+        "type": "excalidraw", "version": 2,
+        "source": "https://excalidraw.com",
+        "elements": elements,
+        "appState": {"gridSize": None, "viewBackgroundColor": "#ffffff"},
+        "files": {},
+    }
+    return json.dumps(scene, indent=2, ensure_ascii=False) + "\n"
