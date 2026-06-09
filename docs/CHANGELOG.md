@@ -4,6 +4,19 @@
 
 ---
 
+## v0.3.5 (2026-06-09) — 回归修复：signed 正则 + hierarchy baseline
+
+### 修复
+- **test_signed_keyword_present**：正则从 `signed reg` → `reg signed`，匹配新的 Verilog 端口顺序
+- **test_all_fixtures_have_baselines**：新增 `hierarchy_2level.xlsx` 的 golden baseline
+- **gen_baseline.py / test_golden.py**：升级支持多模块 fixture（list-of-dict 格式）
+
+### 测试
+- 225 → **226 全过**（+1 hierarchy_2level golden test）
+- 新 tag `v0.3.5`
+
+---
+
 ## v0.3.4 (2026-06-04) — 框图 v0.4 + Verilog 列对齐（15 commits）
 
 ### 框图 v0.4 — 三种格式全面升级
