@@ -51,7 +51,7 @@ def generate_excalidraw_hierarchy(project: Project, top_sheet: str) -> str:
     if top_mod is None:
         return ""
 
-    instances = project.get_submodules(top_sheet)
+    instances = project.get_submodules(top_sheet, recursive=False)
     n_inst = len(instances)
     sub_w, sub_h = 240, max(max(len(inst.module.ports) * 18 + 40 for inst in instances), 80) if instances else 80
     cols = min(n_inst, 3) if n_inst > 0 else 1

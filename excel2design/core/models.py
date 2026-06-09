@@ -206,14 +206,14 @@ class Project:
         """Return sheet names of top-level modules (no '.' in name)."""
         return sorted([n for n in self.modules if "." not in n])
 
-    def get_submodules(self, parent_sheet: str, depth_offset: int = 0) -> list[SubmoduleInstance]:
-        """Return list of SubmoduleInstance for a given parent (recursive)."""
+    def get_submodules(self, parent_sheet: str, depth_offset: int = 0,
+                        recursive: bool = True) -> list[SubmoduleInstance]:
+        """Return submodule instances for a parent. recursive=True includes all descendants."""
         children: list[SubmoduleInstance] = []
         for child_sheet in self.hierarchy.get(parent_sheet, []):
             child_mod = self.modules.get(child_sheet)
             if child_mod is None:
                 continue
-            # instance_name = last segment of dotted sheet name
             instance_name = child_sheet.rsplit(".", 1)[-1]
             children.append(SubmoduleInstance(
                 instance_name=instance_name,
@@ -221,8 +221,8 @@ class Project:
                 depth=depth_offset + 1,
                 parent_sheet=parent_sheet,
             ))
-            # Recursively add grandchildren
-            children.extend(self.get_submodules(child_sheet, depth_offset + 1))
+            if recursive:
+                children.extend(self.get_submodules(child_sheet, depth_offset + 1, recursive=True))
         return children
 
     def walk_bfs(self) -> list[str]:

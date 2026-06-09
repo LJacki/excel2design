@@ -99,7 +99,7 @@ def collect_internal_wires(
     if top_module is None:
         return []
 
-    instances = project.get_submodules(top_sheet)
+    instances = project.get_submodules(top_sheet, recursive=False)
     parent_port_names = {p.name for p in top_module.ports}
 
     # Map: port_name -> list of (instance_name, port)

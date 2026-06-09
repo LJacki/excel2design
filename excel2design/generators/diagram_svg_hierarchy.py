@@ -38,7 +38,7 @@ def generate_svg_hierarchy(project: Project, top_sheet: str) -> str:
     if top_mod is None:
         return ""
 
-    instances = project.get_submodules(top_sheet)
+    instances = project.get_submodules(top_sheet, recursive=False)
     n_inst = len(instances)
 
     sub_widths = [_sub_w(inst.module) for inst in instances]

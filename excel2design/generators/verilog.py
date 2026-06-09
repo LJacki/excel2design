@@ -164,7 +164,7 @@ def generate_wrapper(
     wire_lines = []
     if project is not None:
         sheet = source_sheet or module.name
-        instances = project.get_submodules(sheet)
+        instances = project.get_submodules(sheet, recursive=False)
         wires = collect_internal_wires(project, sheet)
 
         # Format internal wire declarations with column alignment
