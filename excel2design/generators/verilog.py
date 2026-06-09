@@ -219,7 +219,7 @@ def generate_wrapper(
                 suffix = "," if i < len(ports) - 1 else " "
                 cmt = f"  {p['comment']}" if p["comment"] else ""
                 port_lines.append(
-                    f"        .{p['name']:<{max_pn + 1}} ({p['connection']:<{max_cn}}) {suffix}{cmt}"
+                    f"    .{p['name']:<{max_pn + 1}} ({p['connection']:<{max_cn}}) {suffix}{cmt}"
                 )
 
             lines = []
