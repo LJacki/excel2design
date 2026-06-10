@@ -4,6 +4,91 @@
 
 ---
 
+## v0.5.0 (2026-06-10) — 子模块层次化 + 实例化（大版本）
+
+> 15 commits, 159 新增测试, 226 total passed ✅
+> SPEC 升级 v0.5.1 → v0.5.2（§17.6 instance 列对齐规范）
+> 关键新命令：`excel2design project <xlsx> -o <dir>` — 一键产出多文件工程
+
+### Phase 7 — `@defines` 解析 + `.vh` / `.f` 生成
+- 新增 `Define` dataclass + 异常类型
+- `@defines` sheet 解析 + marker 校验
+- 层次异常（OrphanChild / Recursive / EmptyHierarchy）
+- `.vh` 生成器 + Jinja2 模板（如 `\`define ADC_EN 32`）
+- `.f` 文件列表生成器（按 BFS 顺序）
+- 完整单元测试
+
+### Phase 8 — 层次解析器 + `Project` 数据模型
+- `SubmoduleInstance` + `Project` dataclass（含 hierarchy dict / top_modules / `get_submodules` / `walk_bfs`）
+- `parse_project()` in `parsers/hierarchy.py` — 从多 sheet 构建嵌套树
+- 层次异常检测（orphan / recursive / no-top）
+- BFS 遍历顺序 `walk_bfs()` 保证确定性输出
+- 单元测试
+
+### Phase 9a — 实例化连接算法
+- **三级端口匹配**：parent port → sibling port → parent param
+- **模糊后缀匹配**：同名 + 数字后缀（`adc_a` ↔ `adc_b`）自动消除歧义
+- **位宽不匹配检测**：发现不一致时标记 `TODO: width mismatch`
+- **内部 wire 生成决策**：从连接关系推导 wire 列表（不再单独扫描）
+- 单元测试
+
+### Phase 9b — Verilog 实例化模板
+- `partial_instance.j2` 子模板抽离
+- 扩展 `verilog_wrapper.j2`（internal wires + sub-modules 段）
+- `generate_wrapper(project=...)` 支持整工程生成
+- **关键 v0.5.2 修复**：param 的 `name` 列宽取 `max(max_pn, max_pn_p)`、`value` 列填充到 `max_cn`，确保 `)` 和 `,` 在整个 instance 块内同列（SPEC §17.6）
+- 单元测试（8+ cases）+ 参数化实例覆盖
+
+### Phase 9c — 多文件输出 + CLI `project`
+- `generate_all()` 多文件编排器（按 BFS 顺序输出 `rtl/*.v` + `define/*.vh` + `filelist/*.f` + `doc/*.{html,svg,excalidraw}`）
+- **新 CLI 命令** `excel2design project <xlsx> -o <dir>` — 一键产出完整工程
+- 端到端测试（CLI project 命令 subprocess）
+
+### Phase 10a — 独立框图批量模式
+- CLI `diagram --all` 批量生成所有模块
+- 批量输出目录调整 + 错误处理
+- 单元测试
+
+### Phase 10b — 层次化 SVG 框图（**新格式**）
+- `diagram_svg_hierarchy.py` 生成器
+- **层次布局算法**：嵌套矩形（top 框内嵌 sub-module 框）
+- **连线渲染**：wrapper→sub、sub↔sub 内部走线
+- 端口标签 `inst_name.port_name` 格式
+- CLI 自动检测多 sheet → 切换到层次图
+
+### Phase 10c — 层次化 Excalidraw 框图（**新格式**）
+- `diagram_excalidraw_hierarchy.py` 生成器
+- 嵌套矩形 + arrow 元素 + 信号名 label
+- seed 确定性 + 字节稳定
+- CLI 集成
+
+### Phase 11 — 集成测试 + Golden baseline
+- 新增层次化 fixture `hierarchy_2level.xlsx`
+- Golden baseline `expected/hierarchy_2level.json`
+- 回归验证 226 tests all pass
+
+### 验收（vs SPEC v0.5.2 验收标准）
+| 标准 | 结果 |
+|------|------|
+| `@defines` sheet 解析 + `.vh`/`.f` 生成 | ✅ done |
+| `parse_project()` 构建多级嵌套树 | ✅ done |
+| 同名端口自动匹配 + 位宽不匹配标 TODO | ✅ done |
+| wrapper 模板含子模块实例化 + 内部 wire | ✅ done |
+| 多文件输出目录结构 match SPEC §15.4 | ✅ done |
+| CLI `project` 正常工作 | ✅ done |
+| 所有现有 tests 不回归 | ✅ 226 passed |
+| 字节稳定铁律保持 | ✅ golden diff=0 |
+| instance 列对齐（param `)`/`,` 与 port 同列） | ✅ done |
+
+### 真实项目样例
+完整 7 模块 / 3 级层次示例见 `examples/sample_module_iic_top.xlsx`：
+- 顶层 `iic_top` 包含 `iic_slave` + `reg_cfg` + `tempsensor_crg`
+- 同名端口用 `_a` / `_b` 后缀（`adc_a` / `adc_b`）演示模糊匹配
+- 一行命令出全套：`excel2design project examples/sample_module_iic_top.xlsx -o output/`
+- 生成 32 个文件：7 个 `.v` + 1 个 `.vh` + 1 个 `.f` + 23 个图（7 模块 × 3 格式 + 2 层次图）
+
+---
+
 ## v0.3.5 (2026-06-09) — 回归修复：signed 正则 + hierarchy baseline
 
 ### 修复
