@@ -6,14 +6,14 @@ Byte-stable per §5.7. v0.4: column-aligned port/parameter declarations.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from excel2design.core.models import Module, Port, ResetType, Project
-from excel2design.core.connection import ConnectionKind, match_port, collect_internal_wires
+from excel2design.core.connection import ConnectionKind, match_port
 
 
 _TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
@@ -25,7 +25,9 @@ class AlwaysGroup:
     clock: str
     reset_type: ResetType
     is_async: bool
-    regs: list[Port]
+    reset_name: str = "rst_n"   # P0-5 fix: per-group reset signal name
+    reset_note: str = ""        # diagnostic: explicit/name match/fallback/no port
+    regs: list[Port] = field(default_factory=list)
 
     @property
     def label(self) -> str:
@@ -34,7 +36,18 @@ class AlwaysGroup:
         return f"{self.reset_type.value.upper()} RESET ALWAYS @clk={self.clock}"
 
 
-def _group_regs_by_always(regs_with_default: list[Port]) -> list[AlwaysGroup]:
+def _group_regs_by_always(
+    regs_with_default: list[Port],
+    reset_names: Optional[dict[str, str]] = None,
+) -> list[AlwaysGroup]:
+    """Group regs by (clock, reset_type) and pick a reset name for each group.
+
+    P0-5 fix: the chosen reset name is propagated to the template instead of
+    hard-coding ``rst_n`` (the previous behaviour silently produced wrong
+    always blocks for designs whose reset port is named differently per
+    clock domain — e.g. ``rst_a_n`` / ``rst_b_n``).
+    """
+    reset_names = reset_names or {}
     groups: dict[tuple[str, ResetType], list[Port]] = defaultdict(list)
     for port in regs_with_default:
         if not port.clock:
@@ -43,8 +56,15 @@ def _group_regs_by_always(regs_with_default: list[Port]) -> list[AlwaysGroup]:
             continue
         groups[(port.clock, port.reset_type)].append(port)
     sorted_keys = sorted(groups.keys(), key=lambda k: (k[0], _RESET_TYPE_ORDER[k[1]]))
+
     return [
-        AlwaysGroup(clock=ck, reset_type=rt, is_async=(rt == ResetType.ASYNC), regs=groups[(ck, rt)])
+        AlwaysGroup(
+            clock=ck,
+            reset_type=rt,
+            is_async=(rt == ResetType.ASYNC),
+            reset_name=reset_names.get(ck, "rst_n"),
+            regs=groups[(ck, rt)],
+        )
         for ck, rt in sorted_keys
     ]
 
@@ -84,13 +104,56 @@ def _detect_reset_per_clock(module: Module) -> str:
         rts = {rt for c, rt in clocks_with_default if c == clock}
         rt_str = "/".join(sorted(rt.value for rt in rts)) if rts else "none"
         if chosen[0] is not None:
-            lines.append(f"//   {clock} \u2192 {chosen[0].name} ({rt_str})  [{chosen[1]}]")
+            lines.append(f"//   {clock} → {chosen[0].name} ({rt_str})  [{chosen[1]}]")
         else:
-            lines.append(f"//   {clock} \u2192 (NO reset port on this domain) ({rt_str})")
+            lines.append(f"//   {clock} → (NO reset port on this domain) ({rt_str})")
     return "\n".join(lines) if lines else "//   (no clock domains detected)"
 
 
+def _resolve_reset_names_per_clock(
+    module: Module, regs_with_default: list[Port]
+) -> dict[str, str]:
+    """Pick a reset port name for every clock domain (P0-5 fix).
+
+    Returns ``{clock_name: reset_port_name}`` for each clock that appears in
+    the reg-with-default list. Falls back to ``"rst_n"`` when no candidate
+    is found (legacy default — keeps single-clock designs working even
+    when no ``rst``-named port is declared).
+    """
+    input_ports = module.inputs()
+
+    def _is_reset_candidate(p: Port) -> bool:
+        return ("rst" in p.name.lower() or "reset" in p.name.lower()) and p.type.value == "wire"
+
+    clocks = {p.clock for p in regs_with_default if p.clock}
+    any_reset = [p for p in input_ports if _is_reset_candidate(p)]
+    result: dict[str, str] = {}
+    for clock in sorted(clocks):
+        same_domain = [p for p in input_ports if _is_reset_candidate(p) and p.clock == clock]
+        prefix = clock.split("_")[0]
+        name_match = [
+            p for p in any_reset
+            if any(part and part in p.name.lower() for part in clock.lower().split("_") if part != prefix)
+        ]
+        if same_domain:
+            result[clock] = min(same_domain, key=lambda p: len(p.name)).name
+        elif name_match:
+            result[clock] = min(name_match, key=lambda p: len(p.name)).name
+        elif any_reset:
+            result[clock] = min(any_reset, key=lambda p: len(p.name)).name
+        else:
+            result[clock] = "rst_n"
+    return result
+
+
 # ---- Column-aligned port/parameter formatting --------------------------------
+
+# P1-3 fix: the +1 padding between an aligned name and a parenthesis / comma
+# is now a named constant. The original magic +1 appeared in 5+ f-strings
+# across this file; keeping it here makes the SPEC §17.6 alignment rule
+# explicit and easy to change in one place.
+_ALIGN_PAD = 1
+
 
 def _fmt_params(params) -> list[str]:
     """Return aligned parameter declaration lines.
@@ -102,17 +165,24 @@ def _fmt_params(params) -> list[str]:
     max_name = max(len(p.name) for p in params)
     max_val = max(len(str(p.value)) for p in params)
     lines = []
+    n = len(params)
     for i, p in enumerate(params):
-        suffix = "," if i < len(params) - 1 else ""
+        suffix = "," if i < n - 1 else ""
         if p.width:
-            lines.append(f"    parameter [{int(p.width)-1}:0] {p.name:<{max_name}} = {str(p.value):<{max_val}}{suffix}")
+            lines.append(
+                f"    parameter [{int(p.width)-1}:0] "
+                f"{p.name:<{max_name + _ALIGN_PAD}} = {str(p.value):<{max_val}}{suffix}"
+            )
         else:
-            lines.append(f"    parameter {p.name:<{max_name}} = {str(p.value):<{max_val}}{suffix}")
+            lines.append(
+                f"    parameter {p.name:<{max_name + _ALIGN_PAD}} = {str(p.value):<{max_val}}{suffix}"
+            )
     return lines
 
 
 def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) -> list[str]:
     """Return column-aligned port declaration lines.
+
     is_last_group: True if no more port groups follow (outputs after inputs, etc.)
     """
     if not ports:
@@ -121,6 +191,7 @@ def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) ->
     max_width = max(len(w) for w in width_strs) if width_strs else 0
 
     lines = []
+    n = len(ports)
     for i, p in enumerate(ports):
         w = p.width.to_verilog()
         direction = f"{p.direction.value:<7}"
@@ -128,7 +199,7 @@ def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) ->
         signed = f"{'signed':<7}" if p.signed else " " * 7
         width_col = f"{w:<{max_width}}" if w else " " * max_width
         comment = f"  // {p.comment}" if p.comment else ""
-        is_last_overall = is_last_group and (i == len(ports) - 1)
+        is_last_overall = is_last_group and (i == n - 1)
         suffix = "" if is_last_overall else ","
         lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{suffix}{comment}")
     return lines
@@ -159,7 +230,10 @@ def generate_wrapper(
     all_ports = input_ports + output_ports + inout_ports
     max_name = max((len(p.name) for p in all_ports), default=0)
     regs_with_default = [p for p in module.regs() if p.default]
-    always_groups = _group_regs_by_always(regs_with_default)
+    # P0-5 fix: compute per-clock reset port names and pass them to the
+    # always-group builder so the template can emit the right signal.
+    reset_names = _resolve_reset_names_per_clock(module, regs_with_default)
+    always_groups = _group_regs_by_always(regs_with_default, reset_names)
 
     # v0.5: submodule instances and internal wires (optional)
     sub_instances = []

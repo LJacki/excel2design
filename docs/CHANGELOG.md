@@ -4,6 +4,90 @@
 
 ---
 
+## v0.5.1 (2026-06-10) — 优化修复（P0/P1 综合）
+
+> 触发: subagent 优化扫描 → 小马独立验证 → 立即修复
+> 8 commits, 56 新增测试, 282 total passed
+> 修复 5 个 P0（其中 2 个是 subagent 漏报/降级）+ 4 个 P1
+
+### P0 — 必须修
+
+**P0-4 [升级 P2 → P0] SVG / Excalidraw 字节稳定铁律违反**
+- 根因: `utils/clock_colors.py` 和 `diagram_svg.py` 用 Python 内建 `hash()` 做 clock-name 映射，受 `PYTHONHASHSEED` 影响
+- 验证: 同 fixture 跑两次 md5 不同 (`56fae15e` vs `33c82878`)，跨 CI 必挂
+- 修复: `hashlib.md5` 替代 `hash()` + 抽 `_stable_marker_token` helper
+- 回归测试: `tests/generators/test_byte_stability.py` (2 tests, 跨 PYTHONHASHSEED=42/99 验证)
+
+**P0-5 [升级 P1 → P0] always 块硬编码 `rst_n`**
+- 根因: `verilog_wrapper.j2:56` 模板硬编码 `negedge rst_n` / `if (!rst_n)`，没接 `_detect_reset_per_clock` 算出的 per-domain reset port name
+- 真实影响: 多时钟域工程 (`rst_a_n` / `rst_b_n` / `cfg_rst_n`) 生成的 always 永远是错的
+- 修复: `AlwaysGroup.reset_name` 字段 + `_resolve_reset_names_per_clock` 计算 + 模板 `{{ group.reset_name }}` 替换
+- 回归测试: `tests/generators/test_always_reset.py` (3 tests: per-domain / legacy fallback / sync-only)
+
+**P0-1 `_handle_errors` 死代码 + 6× try/except 重复**
+- 根因: `cli.py:42-62` 定义了 `_handle_errors(ctx, exc)` 但 click group 没注册；每个子命令都手动复制 try/except
+- 修复: 删死代码 + 抽 `@catch_errors` decorator + `_exit_code` helper（同时修了一个隐藏 bug：custom `ModuleNotFoundError` 被 Python 内建 shadow，旧代码靠 click 9.x 默认行为蒙混）
+- 收益: -90 行重复，错误处理 1 处
+
+**P0-2 `project` 子命令无 e2e 测试**
+- 根因: v0.5 主打新命令 (`excel2design project`) 完全没有端到端保护
+- 修复: 加 5 个 e2e 测试（exit 0 / rtl 创建 / filelist / 框图 / 错误退出码）+ 1 个 help 输出 assert
+
+### P1 — 应该修
+
+**P1-1 v0.5 新模块加 unit tests**
+- 新增 38 个 unit test: `test_hierarchy.py` (8) + `test_connection.py` (16) + `test_defines.py` (8) + `test_hierarchy_diagrams.py` (10)
+- 覆盖: parse_project / get_submodules / walk_bfs / OrphanChildError / match_port 4 级优先级 / collect_internal_wires / generate_vh / generate_f / diagram_svg_hierarchy / diagram_excalidraw_hierarchy
+
+**P1-2 删 `collect_internal_wires` 死代码**
+- `connection.py::collect_internal_wires` 死代码（verilog.py 重新实现了一遍并加了 width 注释），还有配套的 `InternalWire` dataclass 和 `_widest_port` helper
+- 删除: -55 行死代码
+
+**P1-3 抽 `_ALIGN_PAD = 1` 常量**
+- 消除 `verilog.py` 里 5 处 magic `+1` padding（param + port + instance 三类对齐），统一在 SPEC §17.6 引用
+
+**P1-5 抽 `hierarchy_layout.py` 公共布局模块**
+- 新建 `generators/hierarchy_layout.py`（~180 行）含 `compute_hierarchy_layout` 函数 + `HierarchyLayout` / `SubLayout` / `Wire` dataclass
+- **不重构现有 renderer**（保持 byte-stable）
+- **未来新 renderer**（如 `diagram_html_hierarchy`）可直接用，新加 8 个 unit test
+
+### P2 — 锦上添花
+
+**P2-3 `pyproject.toml` version 0.3.0 → 0.5.1**
+
+### Subagent v1 报告 vs 小马独立验证
+
+| 项 | subagent 报 | 独立验证 | 结果 |
+|---|---|---|---|
+| P0-1 `_handle_errors` 死代码 | P0 | ✅ verified | 修了 |
+| P0-2 `project` 无 e2e | P0 | ✅ verified | 修了 |
+| P0-3 `match_port` 优先级反语义 | P0 | ❌ **误报** | 没动 |
+| `hash(clock)` 字节不稳定 | P2 | ✅ 升级 P0 | 修了 |
+| `always` 块硬编码 `rst_n` | P1 | ✅ 升级 P0 | 修了 |
+| `collect_internal_wires` 死代码 | P1 | ✅ verified | 删了 |
+| v0.5 新模块无单测 | P1 | ✅ verified | 加了 38 |
+| `_ALIGN_PAD` 散落 | P1 | ✅ verified | 抽了 |
+| `_fmt_params` width 边界 | P1 | ❌ 撤回 | SPEC 未定义上限 |
+| 三个对齐循环结构重复 | P1 | ❌ 撤回 | adapter 比原版复杂 |
+
+### Subagent 教训
+
+1. **报告未落地** — subagent 跑 50 次 API 调用但**没真正写报告文件**（只有口头总结）。我重新独立做了完整审查。
+2. **严重度排序错** — `hash()` 字节不稳定是 SPEC §5.7 核心铁律违反，应该 P0 不是 P2
+3. **误报 P0-3** — 把 SPEC 实际正确的优先级（1a+1b→2→3）说成反语义
+
+### 测试统计
+- 226 → **282 passed** (+56)
+- 新增 6 个测试文件
+- e2e: 17 → 23 (+6, 含 1 个 help 增强)
+
+### 升级路径
+- 任何从 v0.5 升到 v0.5.1 的工程不需要改任何 Excel 模板
+- wrapper 输出的 always 块现在使用 per-domain reset port name（如果你之前 hardcode 了 `if (!rst_n)`，现在要重新生成）
+- byte-stable SVG/Excalidraw 输出**完全一致**（除非 hash seed 改变）
+
+---
+
 ## v0.5.0 (2026-06-10) — 子模块层次化 + 实例化（大版本）
 
 > 15 commits, 159 新增测试, 226 total passed ✅

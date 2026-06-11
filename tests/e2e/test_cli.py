@@ -37,6 +37,8 @@ def test_help_exits_0() -> None:
     assert "diagram" in r.stdout
     assert "wrapper" in r.stdout
     assert "all" in r.stdout
+    # P0-2: help output must list the v0.5 'project' command too.
+    assert "project" in r.stdout
 
 
 def test_version_exits_0() -> None:
@@ -222,3 +224,67 @@ def test_wrapper_default_path_works_in_cwd(tmp_path: Path) -> None:
     )
     assert r.returncode == 0
     assert out.exists()
+
+
+# ---- project (v0.5.1: P0-2 regression tests) --------------------------------
+
+def test_project_exits_0(tmp_path: Path) -> None:
+    """P0-2: 'project' command must succeed for a multi-sheet fixture."""
+    r = _run_cli(
+        "project", str(FIXTURE_DIR / "hierarchy_2level.xlsx"),
+        "-o", str(tmp_path),
+    )
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert "Generated" in r.stdout
+
+
+def test_project_creates_rtl_directory(tmp_path: Path) -> None:
+    """P0-2: project must emit rtl/<module>.v for every sheet in BFS order."""
+    r = _run_cli(
+        "project", str(FIXTURE_DIR / "hierarchy_2level.xlsx"),
+        "-o", str(tmp_path),
+    )
+    assert r.returncode == 0
+    rtl = tmp_path / "top" / "rtl"
+    assert rtl.is_dir()
+    v_files = sorted(p.name for p in rtl.glob("*.v"))
+    # hierarchy_2level has top + u_a + u_b
+    assert v_files == ["top.v", "u_a.v", "u_b.v"], f"got {v_files}"
+
+
+def test_project_creates_filelist(tmp_path: Path) -> None:
+    """P0-2: filelist/<top>.f must list every .v in BFS order."""
+    r = _run_cli(
+        "project", str(FIXTURE_DIR / "hierarchy_2level.xlsx"),
+        "-o", str(tmp_path),
+    )
+    assert r.returncode == 0
+    f = tmp_path / "top" / "filelist" / "top.f"
+    assert f.exists()
+    lines = f.read_text(encoding="utf-8").splitlines()
+    rtl_lines = [ln for ln in lines if ln.startswith("rtl/")]
+    assert rtl_lines == ["rtl/top.v", "rtl/u_a.v", "rtl/u_b.v"]
+
+
+def test_project_emits_diagrams(tmp_path: Path) -> None:
+    """P0-2: doc/ must contain html+svg+excalidraw for every module + 2 hierarchy files."""
+    r = _run_cli(
+        "project", str(FIXTURE_DIR / "hierarchy_2level.xlsx"),
+        "-o", str(tmp_path),
+    )
+    assert r.returncode == 0
+    doc = tmp_path / "top" / "doc"
+    assert doc.is_dir()
+    # Per-module: html + svg + excalidraw
+    for mod in ("top", "u_a", "u_b"):
+        for ext in ("html", "svg", "excalidraw"):
+            assert (doc / f"{mod}.{ext}").exists(), f"missing {mod}.{ext}"
+    # Hierarchy diagrams (only when project has hierarchy)
+    assert (doc / "top_hierarchy.svg").exists()
+    assert (doc / "top_hierarchy.excalidraw").exists()
+
+
+def test_project_missing_file_exits_2(tmp_path: Path) -> None:
+    """P0-2: nonexistent xlsx → exit 2 (per SPEC §6)."""
+    r = _run_cli("project", "nonexistent.xlsx", "-o", str(tmp_path))
+    assert r.returncode == 2

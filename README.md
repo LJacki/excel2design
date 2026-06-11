@@ -3,7 +3,7 @@
 > 从 Excel 模块端口表 → (HTML / SVG / Excalidraw) 框图 + Verilog wrapper + 多文件工程的自动化工具集
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-226%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-282%20passing-brightgreen)](#)
 [![Phase](https://img.shields.io/badge/phase-0--11%20done-blue)](#)
 [![License](https://img.shields.io/badge/License-MIT-green)](#)
 

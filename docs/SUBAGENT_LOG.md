@@ -198,4 +198,42 @@
 
 ---
 
+## [2026-06-10] Subagent — 优化空间扫描（v0.5 → v0.5.1 触发器）
+
+**派发人**：小马
+**工具集**：terminal, file
+**模型**：MiniMax-M3
+**结果**：⚠️ **有条件完成**（口头总结落地，但有严重度错判和 1 个误报）
+
+### Prompt 摘要
+- 任务：对 v0.5.0 做探索性代码审查，找"哪里能改、为什么改、怎么改"
+- 范围：全量代码 + 226 tests
+- 关键约束：**不修改项目文件**、**报告写到 /tmp/e2d_optimize_review.md**、每条发现要给文件路径+行号+严重度+建议方向
+
+### Response 摘要
+- 50 次 API 调用 / 380 秒 / 247K input tokens
+- **关键失败**：报告**未真正写文件**（`/tmp/e2d_optimize_review.md` 不存在），subagent self-report 给出 16 项发现 + 严重度分布，但全部是口头
+- 小马**重新独立验证**（B 选项），最终产 `/tmp/e2d_optimize_review_v2.md` 230 行 / 15KB
+
+### 决策记录
+- ❌ **subagent 报告未落地** — 写了 write_file 但实际文件不存在
+- ❌ **P0-3 误报** — subagent 说 match_port 优先级反语义，验证 SPEC §17.1 后是正确（1a+1b→2→3）
+- ❌ **严重度降级 P0-4** — subagent 报 `hash(clock)` 跨进程不稳定为 P2，独立 md5 验证后**实际是 P0**（违反 SPEC §5.7 字节稳定铁律）
+- ❌ **严重度降级 P0-5** — subagent 报 `always` 块硬编码 `rst_n` 为 P1，验证 `_detect_reset_per_clock` 算出来后**没传到模板**——多时钟域必踩雷 = P0
+- ✅ **P0-1/P0-2/P1-1/P1-2/P1-3** subagent 报得准
+- ❌ **P1-4** 三个对齐循环抽公共函数——评估后撤回（adapter 比原版复杂），v0.6 backlog
+- ❌ **P1-6** `_fmt_params` width 边界——评估后撤回（SPEC 未定义上限）
+
+### 总结
+- subagent v1 → 3 P0 / 6 P1 / 5 P2 / 2 P3 = 16 项
+- 小马独立 v2 → 5 P0（2 升级 + 1 误报撤销）/ 4 P1（2 撤回）/ 0 P2 / 0 P3 = 9 项实际处理
+- v0.5.1 共修 5 P0 + 4 P1 + 1 P2 = 10 项
+
+### 学到的
+- **派 subagent 做"独立审查"类任务，必须要求最终 write_file 落地**（不只是口头总结）
+- **subagent 严重度判断不可信**——必须独立验证（md5 / 行内代码引用 / SPEC 对照）
+- **"独立审查 → 重做"的 ROI** 在 subagent 不可靠时**比"接受 subagent"更高**——避免基于错判断的修复
+
+---
+
 （Phase 4 启动后追加）

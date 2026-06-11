@@ -6,11 +6,11 @@ width mismatches, and generates internal wire declarations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from excel2design.core.models import Module, Port, Project, SubmoduleInstance
+from excel2design.core.models import Module, Port
 
 
 class ConnectionKind(Enum):
@@ -28,14 +28,6 @@ class ConnectionResult:
     target_port: Optional[Port] = None
     width_match: bool = True        # True if widths match exactly
     width_note: str = ""            # human-readable mismatch description
-
-
-@dataclass
-class InternalWire:
-    """An internal wire that connects submodules together."""
-    name: str
-    width: str                      # Verilog width string, e.g. "[SRM_DW-1:0]"
-    sources: list[str] = field(default_factory=list)  # submodule instance names
 
 
 def match_port(
@@ -89,44 +81,6 @@ def match_port(
     return ConnectionResult(kind=ConnectionKind.UNCONNECTED)
 
 
-def collect_internal_wires(
-    project: Project,
-    top_sheet: str,
-) -> list[InternalWire]:
-    """Collect all internal wire declarations needed for submodule connections.
-
-    An internal wire is needed when two or more submodules share a port name
-    that doesn't exist on the parent.
-    """
-    top_module = project.modules.get(top_sheet)
-    if top_module is None:
-        return []
-
-    instances = project.get_submodules(top_sheet, recursive=False)
-    parent_port_names = {p.name for p in top_module.ports}
-
-    # Map: port_name -> list of (instance_name, port)
-    sibling_conns: dict[str, list[tuple[str, Port]]] = {}
-    for inst in instances:
-        for port in inst.module.ports:
-            if port.name in parent_port_names:
-                continue  # already connected to parent
-            sibling_conns.setdefault(port.name, []).append((inst.instance_name, port))
-
-    # Generate wires for names shared by 2+ submodules
-    wires: list[InternalWire] = []
-    for name, conns in sibling_conns.items():
-        if len(conns) >= 2:
-            # Use the widest port as the wire width
-            max_width = _widest_port(conns)
-            wires.append(InternalWire(
-                name=name,
-                width=max_width,
-                sources=[c[0] for c in conns],
-            ))
-    return wires
-
-
 def _check_width(a: Port, b: Port) -> tuple[bool, str]:
     """Compare two ports' widths. Returns (match: bool, note: str)."""
     wa = a.width.to_verilog()
@@ -153,11 +107,3 @@ def _fuzzy_match(parent_name: str, child_name: str, instance: str = "") -> bool:
             if re.sub(pat, "", parent_name) == child_name:
                 return True
     return False
-
-
-def _widest_port(conns: list[tuple[str, Port]]) -> str:
-    """Return the widest port's Verilog width among connections."""
-    widths = [p.width.to_verilog() for _, p in conns]
-    # Simple heuristic: prefer the longest width string (parameterized widths
-    # are typically the widest)
-    return max(widths, key=len) if widths else ""

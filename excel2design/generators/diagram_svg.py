@@ -1,14 +1,22 @@
 """SVG block-diagram generator per SPEC §4.3 (v0.4).
 
 v0.4.1: clock-domain colors + multi-line parameters.
+v0.5.1 (P0-4 fix): marker ids use ``hashlib.md5`` (deterministic) instead of
+built-in ``hash()`` so SVG output is byte-stable across processes.
 """
 
 from __future__ import annotations
 
+import hashlib
 import xml.etree.ElementTree as ET
 
 from excel2design.core.models import Module, Port
 from excel2design.utils.clock_colors import clock_color
+
+
+def _stable_marker_token(ck: str) -> str:
+    """Deterministic 8-hex-char token for a clock name (P0-4 fix)."""
+    return hashlib.md5(ck.encode("utf-8")).hexdigest()[:8]
 
 
 # ---- Layout constants -------------------------------------------------------
@@ -105,7 +113,7 @@ def _add_markers(svg: ET.Element, module: Module) -> None:
         for is_in, color in [(True, clock_color(ck, is_input=True)),
                                (False, clock_color(ck, is_input=False))]:
             sufx = "i" if is_in else "o"
-            mid = f"m_{hash(ck) & 0x7FFFFFFF}_{sufx}"
+            mid = f"m_{_stable_marker_token(ck)}_{sufx}"
             marker = ET.SubElement(defs, "marker", {
                 "id": mid,
                 "markerWidth": "8", "markerHeight": "6",
@@ -132,7 +140,7 @@ def _add_markers(svg: ET.Element, module: Module) -> None:
 def _marker_id(ck: str | None, is_input: bool) -> str:
     sufx = "i" if is_input else "o"
     if ck:
-        return f"m_{hash(ck) & 0x7FFFFFFF}_{sufx}"
+        return f"m_{_stable_marker_token(ck)}_{sufx}"
     return f"m_neutral_{sufx}"
 
 

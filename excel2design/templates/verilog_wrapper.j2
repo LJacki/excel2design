@@ -53,8 +53,8 @@ end
 {%- for group in always_groups %}
 
 // ---------- {{ group.label }} ----------
-always @({% if group.is_async %}posedge {{ group.clock }} or negedge rst_n{% else %}posedge {{ group.clock }}{% endif %}) begin
-    if (!rst_n) begin
+always @({% if group.is_async %}posedge {{ group.clock }} or negedge {{ group.reset_name }}{% else %}posedge {{ group.clock }}{% endif %}) begin
+    if (!{{ group.reset_name }}) begin
 {%- for reg in group.regs %}
         {{ reg.name }} <= {{ reg.default }};
 {%- endfor %}
