@@ -167,3 +167,36 @@ def test_no_array_dim_no_suffix_in_svg() -> None:
     p = Port(name="scalar", direction=Direction.INPUT, type=SignalType.WIRE,
              width=PortWidth(raw="1", msb=0, is_parameter=False))
     assert _label_text(p) == "scalar"
+
+
+# v0.6 Phase 13 — interface=1 SVG dashed group container
+
+def test_interface_dashed_group_present() -> None:
+    """Ports with is_interface=True are wrapped in a dashed group rect."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import generate_svg
+    p_iface = Port(name="iface_data", direction=Direction.INPUT, type=SignalType.WIRE,
+                   width=PortWidth(raw="8", msb=7, is_parameter=False),
+                   is_interface=True)
+    p_plain = Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+                   width=PortWidth(raw="1", msb=0, is_parameter=False))
+    m = Module(name="mod", ports=[p_iface, p_plain])
+    svg = generate_svg(m)
+    assert 'stroke-dasharray="4,3"' in svg, f"Expected dashed border in:\n{svg}"
+    # The colour for interface group is the named one.
+    assert "#85C1E9" in svg or "85C1E9" in svg, f"Expected interface colour in:\n{svg}"
+
+
+def test_no_dashed_group_without_interface() -> None:
+    """A module with no is_interface ports has no dashed group rect."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import generate_svg
+    p = Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False))
+    m = Module(name="plain", ports=[p])
+    svg = generate_svg(m)
+    assert 'stroke-dasharray="4,3"' not in svg, f"Did not expect dashed border in:\n{svg}"

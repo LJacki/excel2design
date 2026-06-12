@@ -218,7 +218,7 @@ rx_valid    | output    | 1          | reg  | 1'b0                        | clk 
 | F | `clock` | ❌ | 空 | 关联时钟 |
 | G | `reset_type` | ❌ | `sync` | `sync` / `async` / `none` |
 | H | `signed` | ❌ | `0` | `1` = signed 端口 |
-| I | `interface` | ❌ | `0` | `1` = interface 风格（v0.3 仅记录） |
+| I | `interface` | ❌ | `0` | `1` = interface 端口（v0.6 落地：verilog 加 `// interface` 注释 + SVG 虚线 group 包围） |
 | J | `comment` | ❌ | 空 | 端口说明 |
 
 **`type` 缺省推断**：
@@ -376,8 +376,11 @@ excel2design project <excel> -o <dir>      # ← v0.5 新增
 | 10b | 层次化 SVG 框图 | ✅ | `34c65ea` |
 | 10c | 层次化 Excalidraw 框图 | ✅ | `5cf988c` |
 | 11 | 集成测试 + hierarchy_2level baseline | ✅ | `7b7e15b` |
+| v0.5.1 | 5 P0 + 4 P1 优化修复（subagent 扫描触发） | ✅ | `a44f968` |
+| 12 | `Port.array_dim` 端口数组（unpacked dims） | ✅ | `phase-12-done` |
+| 13 | `interface=1` 真实处理（verilog 注释 + SVG 虚线框） | ✅ | `phase-13-done` |
 
-**总计：226 个测试 100% 通过**
+**总计：316+ 个测试 100% 通过**
 
 详细见 [docs/SPEC.md](docs/SPEC.md)、[docs/CHANGELOG.md](docs/CHANGELOG.md)、[docs/TASKS.md](docs/TASKS.md)。
 

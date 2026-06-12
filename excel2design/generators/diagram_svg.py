@@ -39,6 +39,8 @@ COLOR_BG = "#FFFFFF"
 COLOR_STROKE = "#888888"
 COLOR_TEXT = "#222222"
 COLOR_MUTED = "#666666"
+# v0.6 Phase 13: dashed border colour for interface-port group container.
+COLOR_INTERFACE = "#85C1E9"
 COLOR_ARROW_IN = "#2E86C1"
 COLOR_ARROW_OUT = "#E74C3C"
 COLOR_ARROW_INOUT = "#9B59B6"
@@ -254,6 +256,36 @@ def generate_svg(module: Module) -> str:
             "fill": COLOR_MUTED, "text-anchor": "middle",
         })
         t.text = "(no ports)"
+
+    # v0.6 Phase 13: dashed group container around interface ports.
+    # A single dashed box is drawn around all is_interface=True ports
+    # (across inputs, outputs, and inouts) for visual grouping.
+    iface_ports = [p for p in module.ports if p.is_interface]
+    if iface_ports:
+        iface_names = {p.name for p in iface_ports}
+        ys = []
+        for i, p in enumerate(layout.inputs):
+            if p.name in iface_names:
+                ys.append(layout.row_top + i * ROW_HEIGHT)
+        for i, p in enumerate(layout.outputs):
+            if p.name in iface_names:
+                ys.append(layout.row_top + i * ROW_HEIGHT)
+        for i, p in enumerate(layout.inouts):
+            if p.name in iface_names:
+                ys.append(layout.inout_y + INOUT_STRIP // 2)
+        if ys:
+            pad = 8
+            ET.SubElement(svg, "rect", {
+                "x": str(layout.body_x + pad // 2),
+                "y": str(min(ys) - ROW_HEIGHT // 2),
+                "width": str(layout.body_w - pad),
+                "height": str((max(ys) - min(ys)) + ROW_HEIGHT),
+                "fill": "none",
+                "stroke": COLOR_INTERFACE,
+                "stroke-width": "1.2",
+                "stroke-dasharray": "4,3",
+                "rx": "4", "ry": "4",
+            })
 
     raw = ET.tostring(svg, encoding="unicode")
     out = '<?xml version="1.0" encoding="UTF-8"?>\n' + raw + "\n"
