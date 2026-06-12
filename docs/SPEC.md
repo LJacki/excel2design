@@ -1334,7 +1334,7 @@ tempsensor → adc_a, adc_b
 
 | ID | 任务 | 验收标准 |
 |---|---|---|
-| 12.1 | `Port.array_dim: Optional[List[int]]` 字段（v0.5 留口已存在，落地实现） | dataclass 字段已有，补解析逻辑 |
+| 12.1 | `Port.array_dim: Optional[List[tuple[int,int]]]` 字段（v0.5 **未**留口，v0.6 全新落地） | dataclass 字段新增，存储 `[(hi, lo), ...]` 二维范围列表 |
 | 12.2 | Excel 解析: 新列 `array_dim`（可选），格式 `[7:0]` / `[3:0][1:0]` | `uart_rx.xlsx` 加 1 个 array 端口 → 解析通过 |
 | 12.3 | Verilog 生成: `output [3:0] data [7:0]` 正确输出（含 `packed`/`unpacked` 区分） | `tests/unit/test_verilog.py::test_array_dim` 通过 |
 | 12.4 | SVG 框图: 端口标签后缀 `[7:0]`（不画完整方阵） | `tests/generators/test_diagram_svg.py` 新增 case |
