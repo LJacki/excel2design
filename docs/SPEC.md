@@ -1306,3 +1306,110 @@ tempsensor → adc_a, adc_b
 | **总** | | **~4.3d** | |
 
 
+
+---
+
+## 21. v0.6 阶段路线图（小痛点优先）
+
+> 触发: v0.5.1 收尾后 Jack 拍板"持续迭代 + 小痛点逐步解决"（2026-06-12）
+> 目标: 处理 SPEC §14 列出的 v0.5 阶段未识别风险，按投入产出比排序
+> 原则: 4 个 phase + 1 个文档 phase，每个 phase 独立 commit + 独立测试 + 字节稳定
+
+### 选型理由
+
+| 候选 | 选? | 理由 |
+|---|---|---|
+| `Port.array_dim` 端口数组 | ✅ | §14 评估项，实战常遇（AXI / SRAM），改 3 处（连接算法 / SVG 渲染 / verilog） |
+| `interface=1` 端口真实处理 | ✅ | §14 占位代码清理，量小收益清晰 |
+| 端口/parameter 重名容错 | ✅ | §14 风险项，用户必踩 |
+| 同名端口多驱动方向判断 | ✅ | v0.5 新增风险，真工程必踩 |
+| 参数化实例覆盖校验 | ⏸️ 暂缓 | 多数工程用不到 param override |
+| 跨文件子模块引用 | ⏸️ 暂缓 | 架构改动大（重写解析层） |
+| SystemVerilog modport | ⏸️ 暂缓 | 跟 array_dim 重叠，等 array_dim 落地再评估 |
+| CI / PyPI / 覆盖率 | ⏸️ v0.7 集中做 | 不打断痛点修复节奏 |
+
+### Phase 12 — `Port.array_dim` 端口数组（0.5d）
+
+**目标**: 支持 `output [3:0] data[7:0]` 形式的端口数组，Excel 列 `array_dim` 解析为列表（如 `[7:0]`），穿透到 verilog 输出 / SVG 渲染 / 实例化连接。
+
+| ID | 任务 | 验收标准 |
+|---|---|---|
+| 12.1 | `Port.array_dim: Optional[List[int]]` 字段（v0.5 留口已存在，落地实现） | dataclass 字段已有，补解析逻辑 |
+| 12.2 | Excel 解析: 新列 `array_dim`（可选），格式 `[7:0]` / `[3:0][1:0]` | `uart_rx.xlsx` 加 1 个 array 端口 → 解析通过 |
+| 12.3 | Verilog 生成: `output [3:0] data [7:0]` 正确输出（含 `packed`/`unpacked` 区分） | `tests/unit/test_verilog.py::test_array_dim` 通过 |
+| 12.4 | SVG 框图: 端口标签后缀 `[7:0]`（不画完整方阵） | `tests/generators/test_diagram_svg.py` 新增 case |
+| 12.5 | 实例化连接: `u_ctrl.data[3]` 单元素访问合法，`u_ctrl.data` 整数组留 TODO | `tests/generators/test_connection.py` 扩展 |
+| 12.6 | 字节稳定铁律: array_dim 排序/格式不影响输出字节 | `test_byte_stability.py` 加 fixture |
+
+### Phase 13 — `interface=1` 端口真实处理（0.3d）
+
+**目标**: 清理 v0.3 占位代码，实现 interface 端口的真实 verilog 输出和框图渲染。
+
+| ID | 任务 | 验收标准 |
+|---|---|---|
+| 13.1 | `Port.interface: bool` 字段已在 v0.5.1 加，落地实现 | dataclass 字段已有 |
+| 13.2 | Verilog 生成: `interface_name.signal` 引用 + 框图分组（虚线框包围 interface 成员） | `test_verilog.py::test_interface` 通过 |
+| 13.3 | SVG / Excalidraw: interface 端口画虚线 group container | `test_diagram_svg.py::test_interface_group` |
+| 13.4 | 文档更新: README 加 `interface` 列示例 | `docs/screenshots/interface_port.png` |
+
+### Phase 14 — 端口/parameter 重名容错（0.2d）
+
+**目标**: parameter `WIDTH` 和端口 `width` 共存时不报错（v0.3 视作不同 identifier，v0.6 显式声明）。
+
+| ID | 任务 | 验收标准 |
+|---|---|---|
+| 14.1 | Excel 解析: 检测 parameter 和 port 名称冲突（case-insensitive），发出 `NamingConflictWarning` 而非 error | `test_parser.py::test_param_port_collision_warning` |
+| 14.2 | Verilog 生成: parameter 和 port 重名时加 `_p` 后缀避免编译错误（如 `parameter WIDTH_p`） | `test_verilog.py::test_param_port_collision_suffix` |
+| 14.3 | 文档: README "Known Limitations" 段说明此行为 | — |
+
+### Phase 15 — 同名端口多驱动方向判断（0.5d）
+
+**目标**: 多个子模块同名端口连接时，根据 direction 判断 wire 类型（output→input 单向 vs inout 双向）。
+
+| ID | 任务 | 验收标准 |
+|---|---|---|
+| 15.1 | `SubmoduleInstance.drivers: List[str]` 字段（v0.5 留口已存在），落地实现 | 解析同名 port 收集所有驱动者 |
+| 15.2 | 连接算法: 多 driver 全 output → 错误 `MultiDriverError`；多 driver 含 inout → 转为 `wire` + `assign` | `test_connection.py::test_multi_driver_*` 3 个 case |
+| 15.3 | Verilog 生成: inout 双向连接用 `wire ...; assign ...` 模式 | `test_verilog.py::test_inout_multi_driver` |
+| 15.4 | 框图渲染: 多驱动连线用粗线 + 警告色（黄/红） | `test_diagram_svg.py::test_multi_driver_color` |
+
+### Phase 16 — 文档 + 路线图收尾（0.2d）
+
+| ID | 任务 | 验收标准 |
+|---|---|---|
+| 16.1 | 更新 `docs/CHANGELOG.md` 加 v0.6 段 | — |
+| 16.2 | 更新 `docs/TASKS.md` 加 §Pending Decision / §Stuck 段 | — |
+| 16.3 | SPEC changelog: patch ID M1-M5（v0.6 期间每次修改的 review 记录） | — |
+| 16.4 | pyproject version: 0.5.1 → 0.6.0 | — |
+
+### 总投入
+
+| 阶段 | 估时 |
+|---|---|
+| 12 array_dim | 0.5d |
+| 13 interface 落地 | 0.3d |
+| 14 重名容错 | 0.2d |
+| 15 多驱动方向 | 0.5d |
+| 16 文档收尾 | 0.2d |
+| **总** | **~1.7d** |
+
+### 验收总标准
+
+- 282 现有测试 0 回归
+- 4 个新 phase 共新增 ≥ 16 个 unit test + ≥ 4 个 e2e test
+- 字节稳定铁律 0 违反（跨 PYTHONHASHSEED=42/99 输出一致）
+- 所有警告升级路径清晰（warning → error 的边界条件写进 SPEC）
+- pyproject version bump 到 0.6.0
+
+---
+
+## 22. v0.6 之后路线图（v0.7 候选，暂缓评估）
+
+> 留位用，等 v0.6 全部 phase 完成后 Jack 拍板。
+
+- [ ] CI / GitHub Actions（on push 跑 282+ tests）
+- [ ] PyPI 发布（`pip install excel2design`）
+- [ ] 覆盖率报告（pytest-cov）
+- [ ] 跨文件子模块引用（架构级）
+- [ ] SystemVerilog modport 完整支持（等 array_dim 落地再评估）
+- [ ] 参数化实例覆盖校验
