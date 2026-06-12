@@ -181,3 +181,48 @@ def test_port_ordering_preserved() -> None:
         make_port("c"),
     ])
     assert [p.name for p in m.ports] == ["a", "b", "c"]
+# ---- v0.6 Phase 12.1: Port.array_dim field & helpers ----------------------
+
+def test_port_array_dim_default_none() -> None:
+    """A port constructed without array_dim must default to None (backward-compat)."""
+    p = make_port("scalar_port")
+    assert p.array_dim is None
+    assert p.total_array_elements == 1
+    assert p.to_array_dim_verilog() == ""
+
+
+def test_port_total_array_elements_1d() -> None:
+    """[(7, 0)] → 8 elements total."""
+    p = make_port("array_port")
+    p.array_dim = [(7, 0)]
+    assert p.total_array_elements == 8
+    assert p.to_array_dim_verilog() == "[7:0]"
+
+
+def test_port_total_array_elements_2d() -> None:
+    """[(3, 0), (1, 0)] → 4 × 2 = 8 elements total."""
+    p = make_port("port_array_2d")
+    p.array_dim = [(3, 0), (1, 0)]
+    assert p.total_array_elements == 8
+    assert p.to_array_dim_verilog() == "[3:0][1:0]"
+
+
+def test_port_total_array_elements_empty_list() -> None:
+    """Empty list is treated as scalar (total = 1)."""
+    p = make_port("scalar_port")
+    p.array_dim = []
+    assert p.total_array_elements == 1
+    assert p.to_array_dim_verilog() == ""
+
+
+def test_port_total_array_elements_single_dim_equal() -> None:
+    """hi == lo → exactly 1 element in that dim."""
+    p = make_port("array_port")
+    p.array_dim = [(3, 3), (7, 0)]
+    assert p.total_array_elements == 8
+
+
+def test_port_to_array_dim_verilog_no_leading_space_when_none() -> None:
+    """to_array_dim_verilog returns '' (no leading space) for scalar ports."""
+    p = make_port("array_port")
+    assert p.to_array_dim_verilog() == ""

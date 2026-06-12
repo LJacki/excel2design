@@ -108,6 +108,37 @@ class Port:
     signed: bool = False
     is_interface: bool = False
     comment: Optional[str] = None
+    # v0.6 (SPEC §21 Phase 12): unpacked array dimensions.
+    # Stored as a list of (hi, lo) tuples — one tuple per dimension.
+    #   [(7, 0)]        → [7:0]          (1-D, 8 elements)
+    #   [(3, 0), (1, 0)]→ [3:0][1:0]     (2-D, 16 elements total)
+    # None means "scalar port" (no unpacked dims).
+    array_dim: Optional[list[tuple[int, int]]] = None
+
+    @property
+    def total_array_elements(self) -> int:
+        """Return the product of all unpacked-dim element counts.
+
+        For a scalar port (array_dim is None or empty), returns 1.
+        For [(7, 0)], returns 8 (one dim, 8 elements).
+        For [(3, 0), (1, 0)], returns 16 (4 × 4 elements).
+        """
+        if not self.array_dim:
+            return 1
+        prod = 1
+        for hi, lo in self.array_dim:
+            prod *= (hi - lo + 1)
+        return prod
+
+    def to_array_dim_verilog(self) -> str:
+        """Return unpacked-dim suffix for Verilog port declaration.
+
+        Empty string when no array_dim; otherwise concatenated `[hi:lo]` blocks.
+        Example: [(7, 0)] → ' [7:0]'; [(3, 0), (1, 0)] → ' [3:0][1:0]'.
+        """
+        if not self.array_dim:
+            return ""
+        return "".join(f"[{hi}:{lo}]" for hi, lo in self.array_dim)
 
 
 @dataclass

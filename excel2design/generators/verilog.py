@@ -1,10 +1,12 @@
 """Verilog wrapper generator per SPEC §5.
 
 Byte-stable per §5.7. v0.4: column-aligned port/parameter declarations.
+v0.6 Phase 14: parameter/port naming conflict → parameter gets ``_p`` suffix.
 """
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,12 +14,52 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from excel2design.core.models import Module, Port, ResetType, Project
+from excel2design.core.models import Module, Parameter, Port, ResetType, Project
 from excel2design.core.connection import ConnectionKind, match_port
+from excel2design.parsers.excel import find_param_port_conflicts
 
 
 _TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
 _RESET_TYPE_ORDER = {ResetType.ASYNC: 0, ResetType.NONE: 1, ResetType.SYNC: 2}
+
+# v0.6 Phase 14: parameter/port name-collision mitigation.
+# Word-boundary regex; case-insensitive. Only identifiers [A-Za-z_][A-Za-z0-9_]*
+# are eligible for substitution (we must not touch digits/literals).
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_P_SUFFIX = "_p"
+
+
+def _substitute_param_refs(text: str, name_map: dict[str, str]) -> str:
+    """Replace whole-word parameter references in ``text`` per ``name_map``.
+
+    Keys in ``name_map`` are case-insensitive. The replacement uses the
+    original (un-suffixed) casing of the *value* passed in by the caller
+    — typically the key with ``_p`` appended.
+
+    Example: ``"[WIDTH-1:0]"`` with ``{"WIDTH": "WIDTH_p"}`` →
+    ``"[WIDTH_p-1:0]"``.
+    """
+    if not text or not name_map:
+        return text
+    lower_map = {k.lower(): v for k, v in name_map.items()}
+
+    def _repl(match: re.Match) -> str:
+        token = match.group(0)
+        replacement = lower_map.get(token.lower())
+        return replacement if replacement is not None else token
+
+    return _IDENTIFIER_RE.sub(_repl, text)
+
+
+def _build_param_name_map(module: Module) -> dict[str, str]:
+    """Return ``{original_param_name: suffixed_name}`` for conflicting params.
+
+    Only parameters whose name (case-insensitive) collides with a port name
+    are included. Original casing of the key is preserved; the value is the
+    same name with ``_p`` appended (e.g. ``WIDTH`` → ``WIDTH_p``).
+    """
+    conflicts = find_param_port_conflicts(module.parameters, module.ports)
+    return {name: f"{name}{_P_SUFFIX}" for name in conflicts}
 
 
 @dataclass(frozen=True)
@@ -155,27 +197,39 @@ def _resolve_reset_names_per_clock(
 _ALIGN_PAD = 1
 
 
-def _fmt_params(params) -> list[str]:
+def _fmt_params(params, name_map: dict[str, str] | None = None) -> list[str]:
     """Return aligned parameter declaration lines.
 
     Columns: name(padded to max) = value(padded to max), comma
+
+    v0.6 Phase 14: ``name_map`` maps original parameter name → suffixed
+    name (e.g. ``WIDTH`` → ``WIDTH_p``). When present, conflicting params
+    are emitted with the suffix; the *value* column is also rewritten so
+    that any internal references use the new identifier.
     """
     if not params:
         return []
-    max_name = max(len(p.name) for p in params)
-    max_val = max(len(str(p.value)) for p in params)
+    nm: dict[str, str] = name_map or {}
+    # Display the suffixed name (or the original if not in map).
+    display_names = [nm.get(p.name, p.name) for p in params]
+    max_name = max(len(n) for n in display_names)
+    # Values can also reference the parameter (rare, but possible).
+    display_values = [_substitute_param_refs(str(p.value), nm) for p in params]
+    max_val = max(len(v) for v in display_values)
     lines = []
     n = len(params)
     for i, p in enumerate(params):
         suffix = "," if i < n - 1 else ""
+        disp_name = display_names[i]
+        disp_value = display_values[i]
         if p.width:
             lines.append(
                 f"    parameter [{int(p.width)-1}:0] "
-                f"{p.name:<{max_name + _ALIGN_PAD}} = {str(p.value):<{max_val}}{suffix}"
+                f"{disp_name:<{max_name + _ALIGN_PAD}} = {disp_value:<{max_val}}{suffix}"
             )
         else:
             lines.append(
-                f"    parameter {p.name:<{max_name + _ALIGN_PAD}} = {str(p.value):<{max_val}}{suffix}"
+                f"    parameter {disp_name:<{max_name + _ALIGN_PAD}} = {disp_value:<{max_val}}{suffix}"
             )
     return lines
 
@@ -184,6 +238,11 @@ def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) ->
     """Return column-aligned port declaration lines.
 
     is_last_group: True if no more port groups follow (outputs after inputs, etc.)
+
+    v0.6 Phase 13: if a port has ``is_interface=True``, append
+    ``// interface`` annotation so that downstream tools / humans can
+    easily identify interface-grouped members without parsing the
+    spreadsheet.
     """
     if not ports:
         return []
@@ -199,9 +258,11 @@ def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) ->
         signed = f"{'signed':<7}" if p.signed else " " * 7
         width_col = f"{w:<{max_width}}" if w else " " * max_width
         comment = f"  // {p.comment}" if p.comment else ""
+        # Phase 13: interface annotation
+        iface_note = "  // interface" if p.is_interface else ""
         is_last_overall = is_last_group and (i == n - 1)
         suffix = "" if is_last_overall else ","
-        lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{suffix}{comment}")
+        lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{suffix}{comment}{iface_note}")
     return lines
 
 
@@ -230,6 +291,71 @@ def generate_wrapper(
     all_ports = input_ports + output_ports + inout_ports
     max_name = max((len(p.name) for p in all_ports), default=0)
     regs_with_default = [p for p in module.regs() if p.default]
+
+    # v0.6 Phase 14: build name_map of conflicting parameter names.
+    # Any width expression or default value referencing a conflicting
+    # parameter must be rewritten to use the suffixed identifier so the
+    # emitted Verilog compiles. The original Parameter/Port objects are
+    # not mutated; we substitute on the fly via _substitute_param_refs.
+    name_map = _build_param_name_map(module)
+
+    def _renamed_width(p: Port):
+        """Return a (string, dataclass) pair for the port's width expression.
+
+        The PortWidth object is reused when the substitution is a no-op;
+        a new PortWidth is constructed when the raw string changed (so the
+        existing ``to_verilog()`` can format ``[<raw>-1:0]`` correctly).
+        """
+        if not name_map:
+            return p.width
+        new_raw = _substitute_param_refs(p.width.raw, name_map)
+        if new_raw == p.width.raw:
+            return p.width
+        from excel2design.parsers.width import PortWidth
+        return PortWidth(raw=new_raw, msb=p.width.msb, is_parameter=p.width.is_parameter)
+
+    def _renamed_default(d: Optional[str]) -> Optional[str]:
+        if d is None or not name_map:
+            return d
+        return _substitute_param_refs(d, name_map)
+
+    def _apply_suffix_to_port(p: Port) -> Port:
+        """Return a copy of ``p`` with width/default rewritten per name_map."""
+        new_width = _renamed_width(p)
+        new_default = _renamed_default(p.default)
+        if new_width is p.width and new_default is p.default:
+            return p
+        return Port(
+            name=p.name,
+            direction=p.direction,
+            width=new_width,
+            type=p.type,
+            default=new_default,
+            clock=p.clock,
+            reset_type=p.reset_type,
+            signed=p.signed,
+            is_interface=p.is_interface,
+            comment=p.comment,
+        )
+
+    # Apply suffix to every port whose width/default may reference a
+    # conflicting parameter. This is a no-op for ports that don't reference
+    # the renamed parameter (their raw width strings are untouched).
+    if name_map:
+        new_ports = [_apply_suffix_to_port(p) for p in module.ports]
+        module = Module(
+            name=module.name,
+            ports=new_ports,
+            parameters=module.parameters,
+            source_file=module.source_file,
+            source_sheet=module.source_sheet,
+        )
+        input_ports = module.inputs()
+        output_ports = module.outputs()
+        inout_ports = module.inouts()
+        all_ports = input_ports + output_ports + inout_ports
+        regs_with_default = [p for p in module.regs() if p.default]
+
     # P0-5 fix: compute per-clock reset port names and pass them to the
     # always-group builder so the template can emit the right signal.
     reset_names = _resolve_reset_names_per_clock(module, regs_with_default)
@@ -317,7 +443,7 @@ def generate_wrapper(
         module=module,
         source_file=str(source_file) if source_file else "",
         source_sheet=source_sheet or module.source_sheet or "",
-        param_lines=_fmt_params(module.parameters),
+        param_lines=_fmt_params(module.parameters, name_map),
         input_lines=_fmt_ports(input_ports, max_name, is_last_group=not bool(output_ports or inout_ports)),
         output_lines=_fmt_ports(output_ports, max_name, is_last_group=not bool(inout_ports)),
         inout_lines=_fmt_ports(inout_ports, max_name, is_last_group=True),

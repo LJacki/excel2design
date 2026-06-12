@@ -219,3 +219,114 @@ def test_no_trailing_whitespace() -> None:
     v = generate_wrapper(m)
     for line in v.split("\n"):
         assert line == line.rstrip(), f"trailing whitespace: {line!r}"
+
+
+# ---- v0.6 Phase 14: parameter/port naming collision (_p suffix) ---------
+
+def test_param_port_collision_suffix() -> None:
+    """When ``WIDTH`` (param) collides with ``width`` (port), the parameter
+    is emitted as ``WIDTH_p`` and the port keeps its original name.
+    """
+    from excel2design.core.models import (
+        Direction, Module, Parameter, Port, ResetType, SignalType,
+    )
+    from excel2design.parsers.width import PortWidth
+    m = Module(
+        name="m",
+        parameters=[Parameter(name="WIDTH", value="8")],
+        ports=[
+            Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False)),
+            Port(name="width", direction=Direction.OUTPUT, type=SignalType.REG,
+                 width=PortWidth(raw="WIDTH", msb=None, is_parameter=True),
+                 default="1'b0", clock="clk", reset_type=ResetType.ASYNC),
+        ],
+    )
+    v = generate_wrapper(m)
+    # Parameter must be emitted with _p suffix.
+    assert "parameter WIDTH_p" in v, (
+        f"Expected 'parameter WIDTH_p', got:\n{v}"
+    )
+    # Original 'parameter WIDTH ' (no suffix) should NOT appear.
+    assert "parameter WIDTH " not in v, (
+        f"Parameter 'WIDTH' should be suffixed; got:\n{v}"
+    )
+    # Port keeps its original name (no suffix).
+    assert "width" in v
+    # The port line should still reference 'width' (not 'width_p').
+    assert re.search(r"\bwidth\b", v), "port 'width' should be present"
+
+
+def test_param_port_collision_width_reference_replaced() -> None:
+    """Width expression referencing a colliding param is rewritten to ``_p``."""
+    from excel2design.core.models import (
+        Direction, Module, Parameter, Port, ResetType, SignalType,
+    )
+    from excel2design.parsers.width import PortWidth
+    m = Module(
+        name="m",
+        parameters=[Parameter(name="WIDTH", value="8")],
+        ports=[
+            Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False)),
+            Port(name="width", direction=Direction.OUTPUT, type=SignalType.REG,
+                 width=PortWidth(raw="WIDTH", msb=None, is_parameter=True),
+                 default="{WIDTH{1'b0}}", clock="clk", reset_type=ResetType.ASYNC),
+        ],
+    )
+    v = generate_wrapper(m)
+    # Width expression should now use the suffixed name.
+    assert "[WIDTH_p-1:0]" in v, (
+        f"Expected '[WIDTH_p-1:0]' in width expression, got:\n{v}"
+    )
+    assert "[WIDTH-1:0]" not in v, (
+        f"Old '[WIDTH-1:0]' should be replaced; got:\n{v}"
+    )
+    # Default literal should also use the suffixed name.
+    assert "{WIDTH_p{1'b0}}" in v, (
+        f"Expected '{{WIDTH_p{{1'b0}}}}' in default, got:\n{v}"
+    )
+    assert "{WIDTH{1'b0}}" not in v, (
+        f"Old '{{WIDTH{{1'b0}}}}' should be replaced; got:\n{v}"
+    )
+
+
+def test_param_port_collision_byte_stable() -> None:
+    """The collision-mitigation output must be byte-stable across runs.
+
+    SPEC §5.7: the same input Module → identical Verilog string.
+    """
+    from excel2design.core.models import (
+        Direction, Module, Parameter, Port, ResetType, SignalType,
+    )
+    from excel2design.parsers.width import PortWidth
+    m = Module(
+        name="m",
+        parameters=[Parameter(name="WIDTH", value="8")],
+        ports=[
+            Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False)),
+            Port(name="width", direction=Direction.OUTPUT, type=SignalType.REG,
+                 width=PortWidth(raw="WIDTH", msb=None, is_parameter=True),
+                 default="1'b0", clock="clk", reset_type=ResetType.ASYNC),
+        ],
+    )
+    a = generate_wrapper(m)
+    b = generate_wrapper(m)
+    assert a == b
+
+
+def test_no_collision_unchanged() -> None:
+    """When there's no conflict, output is identical to v0.5 baseline.
+
+    The ``DATA_WIDTH`` parameter is used in port width, but no port has
+    the same name — so no substitution should occur.
+    """
+    m = load("uart_rx")
+    v = generate_wrapper(m)
+    # No _p suffixed parameter expected.
+    assert "DATA_WIDTH_p" not in v, (
+        f"Unexpected 'DATA_WIDTH_p' in non-colliding module:\n{v}"
+    )
+    # Original DATA_WIDTH should be present.
+    assert "DATA_WIDTH" in v

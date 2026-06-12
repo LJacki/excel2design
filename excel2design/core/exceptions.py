@@ -200,3 +200,24 @@ class EmptyHierarchyError(HierarchyError):
     """No top-level module found (all sheets have '.' prefix)."""
     def __init__(self) -> None:
         super().__init__("没有顶层模块（所有 sheet 名都含 '.'）")
+
+
+# ---- v0.6 Phase 14: Naming conflict warning (SPEC §21) -------------------
+
+class NamingConflictWarning(UserWarning):
+    """A parameter name collides with a port name (case-insensitive).
+
+    v0.6 mitigation: the generator will suffix the parameter with ``_p`` in
+    the emitted Verilog (e.g. ``parameter WIDTH_p = 8``) and rewrite every
+    in-text reference (width expressions, default literals) to use the
+    suffixed name. The port itself keeps its original identifier.
+    """
+
+    def __init__(self, sheet: str, names: list[str]) -> None:
+        quoted = ", ".join(f"'{n}'" for n in names)
+        super().__init__(
+            f"[sheet: {sheet}] parameter 和 port 重名（case-insensitive）: {quoted}。"
+            f"Verilog 输出将自动给 parameter 加 '_p' 后缀以避免编译错误。"
+        )
+        self.sheet = sheet
+        self.names = names

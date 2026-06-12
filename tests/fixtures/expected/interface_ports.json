@@ -1,0 +1,121 @@
+[
+  {
+    "name": "bus_consumer",
+    "source_sheet": "bus_consumer",
+    "parameters": [],
+    "ports": [
+      {
+        "name": "clk",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "系统时钟"
+      },
+      {
+        "name": "rst_n",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "异步低有效复位"
+      },
+      {
+        "name": "bus_data",
+        "direction": "input",
+        "width": {
+          "raw": "8",
+          "msb": 7,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": true,
+        "comment": "interface axi_in"
+      },
+      {
+        "name": "bus_valid",
+        "direction": "input",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "wire",
+        "default": null,
+        "clock": null,
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": true,
+        "comment": "interface axi_in"
+      },
+      {
+        "name": "bus_ready",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": true,
+        "comment": "interface axi_in"
+      },
+      {
+        "name": "irq_out",
+        "direction": "output",
+        "width": {
+          "raw": "1",
+          "msb": 0,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "1'b0",
+        "clock": "clk",
+        "reset_type": "async",
+        "signed": false,
+        "is_interface": false,
+        "comment": "普通输出"
+      },
+      {
+        "name": "status_reg",
+        "direction": "output",
+        "width": {
+          "raw": "4",
+          "msb": 3,
+          "is_parameter": false
+        },
+        "type": "reg",
+        "default": "4'h0",
+        "clock": "clk",
+        "reset_type": "sync",
+        "signed": false,
+        "is_interface": false,
+        "comment": "普通状态"
+      }
+    ]
+  }
+]

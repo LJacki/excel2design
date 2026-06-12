@@ -11,6 +11,7 @@ Public entry points:
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -25,6 +26,7 @@ from excel2design.core.exceptions import (
     MarkerMissingError,
     MergedCellError,
     ModuleNotFoundError,
+    NamingConflictWarning,
     PortValidationError,
 )
 from excel2design.core.models import (
@@ -54,6 +56,63 @@ PORT_HEADER = [
     "name", "direction", "width", "type", "default",
     "clock", "reset_type", "signed", "interface", "comment",
 ]
+# v0.6 (SPEC §21 Phase 12): optional column 11 for unpacked array dims.
+# Older fixtures that don't have this column remain header-valid because
+# PORT_HEADER is still 10 columns — the validator slices `actual[:len(expected)]`.
+PORT_HEADER_ARRAY_DIM = "array_dim"
+
+
+# ---- array_dim parsing (v0.6 / SPEC §21 Phase 12) ---------------------------
+
+import re as _re
+_ARRAY_DIM_RE = _re.compile(r"\[(\-?\d+):(\-?\d+)\]")
+
+
+def parse_array_dim(
+    raw: str | None,
+    *,
+    sheet: str = "<unknown>",
+    row: int = 0,
+    col: int = 0,
+) -> Optional[list[tuple[int, int]]]:
+    """Parse an Excel `array_dim` cell value.
+
+    Accepted formats:
+      - "" / " "           → None (scalar port)
+      - "[7:0]"            → [(7, 0)]
+      - "[3:0][1:0]"       → [(3, 0), (1, 0)]
+      - "  [7:0]  "        → [(7, 0)]    (whitespace trimmed)
+
+    Raises:
+        PortValidationError: malformed brackets, non-numeric indices,
+                             reversed ranges (hi < lo), or extra garbage.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return None
+    matches = _ARRAY_DIM_RE.findall(s)
+    # Anything left over between or after the bracket pairs → reject.
+    stripped = _ARRAY_DIM_RE.sub("", s).strip()
+    if not matches or stripped:
+        raise PortValidationError(
+            f"非法 array_dim 格式: '{raw}'",
+            sheet=sheet, row=row, col=col,
+            suggestion=(
+                "array_dim 必须是 '[hi:lo]' 或 '[hi:lo][hi:lo]' 形式，"
+                "如 '[7:0]' 或 '[3:0][1:0]'；留空表示标量端口"
+            ),
+        )
+    dims: list[tuple[int, int]] = []
+    for hi_s, lo_s in matches:
+        hi, lo = int(hi_s), int(lo_s)
+        if hi < lo:
+            raise PortValidationError(
+                f"array_dim 范围反向: '[{hi}:{lo}]'（hi < lo）",
+                sheet=sheet, row=row, col=col,
+                suggestion="array_dim 的 hi 必须 >= lo，例如 '[7:0]' 而非 '[0:7]'",
+            )
+        dims.append((hi, lo))
+    return dims
 
 
 # ---- Public API ------------------------------------------------------------
@@ -147,6 +206,12 @@ def _parse_sheet(ws: Worksheet, source_file: Path) -> Optional[Module]:
 
     # ---- Validate uniqueness ---------------------------------------------
     _validate_unique_ports(ports, source_sheet=ws.title)
+
+    # v0.6 Phase 14: detect parameter/port name collisions (case-insensitive)
+    # and emit NamingConflictWarning so the generator can apply the _p
+    # suffix mitigation. The original parameter names are preserved on the
+    # Module object — the generator owns the suffix decision.
+    _check_param_port_conflicts(parameters, ports, source_sheet=ws.title)
 
     return Module(
         name=module_name,  # last segment for dotted names
@@ -273,6 +338,12 @@ def _parse_one_port(
     signed_raw = cell_to_str(row[7])
     interface_raw = cell_to_str(row[8])
     comment = cell_to_str(row[9])
+    # v0.6 (SPEC §21 Phase 12): optional 11th column `array_dim`.
+    # Older fixtures don't have it → row[10] is None / out-of-range; treat as None.
+    if len(row) > 10:
+        array_dim_raw = cell_to_str(row[10])
+    else:
+        array_dim_raw = ""
 
     if not name:
         # No name = skip (treated as stray)
@@ -302,6 +373,12 @@ def _parse_one_port(
     signed = _truthy(signed_raw)
     is_interface = _truthy(interface_raw)
 
+    # v0.6 (SPEC §21 Phase 12): optional array_dim column 11.
+    array_dim = parse_array_dim(
+        array_dim_raw,
+        sheet=source_sheet, row=row_num, col=11,
+    )
+
     return Port(
         name=name,
         direction=direction,
@@ -313,6 +390,7 @@ def _parse_one_port(
         signed=signed,
         is_interface=is_interface,
         comment=comment or None,
+        array_dim=array_dim,
     )
 
 
@@ -328,6 +406,39 @@ def _validate_unique_ports(ports: list[Port], source_sheet: str) -> None:
     for name, rows in rows_by_name.items():
         if len(rows) > 1:
             raise DuplicatePortError(source_sheet, name, rows)
+
+
+# ---- v0.6 Phase 14: parameter/port naming conflict detection -------------
+
+def find_param_port_conflicts(
+    parameters: list[Parameter], ports: list[Port]
+) -> list[str]:
+    """Return the original-cased names of parameters that collide with ports.
+
+    Case-insensitive match. Excel order preserved. Empty list if no conflict.
+    Public so the verilog generator can apply the same rule.
+    """
+    if not parameters or not ports:
+        return []
+    port_names_lower = {p.name.lower() for p in ports}
+    return [p.name for p in parameters if p.name.lower() in port_names_lower]
+
+
+def _check_param_port_conflicts(
+    parameters: list[Parameter], ports: list[Port], source_sheet: str
+) -> None:
+    """Emit NamingConflictWarning for any case-insensitive name overlap.
+
+    Iterates the parameter list in Excel order; the *first* occurrence of a
+    conflicting name is reported. Original casing is preserved (we do NOT
+    rename to lower-case — the generator owns the suffix decision).
+    """
+    conflicts = find_param_port_conflicts(parameters, ports)
+    if conflicts:
+        warnings.warn(
+            NamingConflictWarning(source_sheet, conflicts),
+            stacklevel=3,
+        )
 
 
 # ---- v0.5: @defines sheet parsing ------------------------------------------
