@@ -373,3 +373,112 @@ def test_no_array_dim_no_suffix() -> None:
     # The port may end with newline (last port) or comma (followed by other ports).
     assert re.search(r"\bscalar\b", v), f"Expected bare 'scalar' in:\n{v}"
     assert "scalar[" not in v, f"Did not expect 'scalar[' in:\n{v}"
+
+
+# v0.6 Phase 15 — Multi-driver / bidirectional connection tests
+
+def _make_module(name, ports):
+    from excel2design.core.models import Module
+    return Module(name=name, ports=ports)
+
+
+def _make_submod(name, ports):
+    return _make_module(name, ports)
+
+
+def test_phase15_sibling_single_driver_one_sink() -> None:
+    """Case 1: 1 output driver + 1 input sink → simple wire (no error)."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.models import SubmoduleInstance
+    from excel2design.generators.verilog import _build_sibling_wires
+
+    p_out = Port(name="bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="8", msb=7, is_parameter=False))
+    p_in = Port(name="bus", direction=Direction.INPUT, type=SignalType.WIRE,
+                width=PortWidth(raw="8", msb=7, is_parameter=False))
+    mod_a = _make_submod("a", [p_out])
+    mod_b = _make_submod("b", [p_in])
+    inst_a = SubmoduleInstance(instance_name="u_a", module=mod_a, depth=1, parent_sheet="p")
+    inst_b = SubmoduleInstance(instance_name="u_b", module=mod_b, depth=1, parent_sheet="p")
+    instances = [inst_a, inst_b]
+    parent = _make_module("p", [])
+    sw = _build_sibling_wires(instances, parent)
+    assert "bus" in sw
+    assert sw["bus"]["drivers"] == ["u_a"]
+    assert sw["bus"]["sinks"] == ["u_b"]
+    assert sw["bus"]["inouts"] == []
+
+
+def test_phase15_multi_output_drivers_raises() -> None:
+    """Case 2: 2 output drivers on same wire → MultiDriverError."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.models import SubmoduleInstance
+    from excel2design.core.exceptions import MultiDriverError
+    from excel2design.generators.verilog import _build_sibling_wires, _validate_no_multi_driver
+
+    p_out = Port(name="bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="8", msb=7, is_parameter=False))
+    mod_a = _make_submod("a", [p_out])
+    mod_b = _make_submod("b", [p_out])
+    inst_a = SubmoduleInstance(instance_name="u_a", module=mod_a, depth=1, parent_sheet="p")
+    inst_b = SubmoduleInstance(instance_name="u_b", module=mod_b, depth=1, parent_sheet="p")
+    instances = [inst_a, inst_b]
+    parent = _make_module("p", [])
+    sw = _build_sibling_wires(instances, parent)
+    import pytest
+    with pytest.raises(MultiDriverError) as exc_info:
+        _validate_no_multi_driver(sw)
+    assert "bus" in str(exc_info.value)
+    assert "u_a" in str(exc_info.value) and "u_b" in str(exc_info.value)
+
+
+def test_phase15_inout_bidirectional() -> None:
+    """Case 3: 1 inout + 1 inout + 1 input → wire + bidirectional comment."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.models import SubmoduleInstance
+    from excel2design.generators.verilog import _build_sibling_wires
+
+    p_inout = Port(name="bus", direction=Direction.INOUT, type=SignalType.WIRE,
+                   width=PortWidth(raw="8", msb=7, is_parameter=False))
+    p_in = Port(name="bus", direction=Direction.INPUT, type=SignalType.WIRE,
+                width=PortWidth(raw="8", msb=7, is_parameter=False))
+    mod_a = _make_submod("a", [p_inout])
+    mod_b = _make_submod("b", [p_in])
+    inst_a = SubmoduleInstance(instance_name="u_a", module=mod_a, depth=1, parent_sheet="p")
+    inst_b = SubmoduleInstance(instance_name="u_b", module=mod_b, depth=1, parent_sheet="p")
+    instances = [inst_a, inst_b]
+    parent = _make_module("p", [])
+    sw = _build_sibling_wires(instances, parent)
+    assert "bus" in sw
+    assert "u_a" in sw["bus"]["inouts"]
+    assert "u_b" in sw["bus"]["sinks"]
+
+
+def test_phase15_output_and_inout() -> None:
+    """Case 4: 1 output driver + 1 inout → wire (no error, inout is acceptable)."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.models import SubmoduleInstance
+    from excel2design.generators.verilog import _build_sibling_wires
+
+    p_out = Port(name="bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="8", msb=7, is_parameter=False))
+    p_inout = Port(name="bus", direction=Direction.INOUT, type=SignalType.WIRE,
+                   width=PortWidth(raw="8", msb=7, is_parameter=False))
+    mod_a = _make_submod("a", [p_out])
+    mod_b = _make_submod("b", [p_inout])
+    inst_a = SubmoduleInstance(instance_name="u_a", module=mod_a, depth=1, parent_sheet="p")
+    inst_b = SubmoduleInstance(instance_name="u_b", module=mod_b, depth=1, parent_sheet="p")
+    instances = [inst_a, inst_b]
+    parent = _make_module("p", [])
+    sw = _build_sibling_wires(instances, parent)
+    assert "bus" in sw
+    assert "u_a" in sw["bus"]["drivers"]
+    assert "u_b" in sw["bus"]["inouts"]

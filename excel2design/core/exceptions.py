@@ -221,3 +221,15 @@ class NamingConflictWarning(UserWarning):
         )
         self.sheet = sheet
         self.names = names
+
+
+# ---- v0.6 Phase 15: multi-driver error (SPEC §21) ------------------------
+
+class MultiDriverError(SemanticError):
+    """Two or more OUTPUT sibling ports are connected to the same wire.
+
+    v0.6 mitigation: this is a hard error (not a warning) because
+    shorting two output drivers is invalid Verilog. The user must either
+    change one to inout, add a mux/arbiter, or pass the signal through a
+    top-level port.
+    """

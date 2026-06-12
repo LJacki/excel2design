@@ -278,6 +278,78 @@ def _setup_env() -> Environment:
     )
 
 
+def _build_sibling_wires(
+    instances: list,
+    parent_module: Module,
+) -> dict[str, dict]:
+    """Compute sibling-wire info for a set of submodule instances (Phase 15).
+
+    Returns ``{port_name: {"drivers": [...], "sinks": [...], "inouts": [...], "width": str}}``
+    where each list contains the ``instance_name`` of the participating
+    submodules. This is the foundation for the multi-driver detection and
+    bidirectional wire emission that follows.
+    """
+    sibling_wires: dict[str, dict] = {}
+    for inst in instances:
+        sibling_mods = [inst2.module for inst2 in instances if inst2 != inst]
+        for p in inst.module.ports:
+            result = match_port(p, parent_module, sibling_mods, inst.instance_name)
+            if result.kind != ConnectionKind.SIBLING_PORT:
+                continue
+            sibling_wires.setdefault(
+                p.name,
+                {"drivers": [], "sinks": [], "inouts": [], "width": p.width.to_verilog()},
+            )
+            if p.direction.value == "output":
+                sibling_wires[p.name]["drivers"].append(inst.instance_name)
+            elif p.direction.value == "inout":
+                sibling_wires[p.name]["inouts"].append(inst.instance_name)
+            else:
+                sibling_wires[p.name]["sinks"].append(inst.instance_name)
+    return sibling_wires
+
+
+def _validate_no_multi_driver(sibling_wires: dict[str, dict]) -> None:
+    """Raise :class:`MultiDriverError` if any sibling wire has ≥2 output drivers.
+
+    Shorting two output drivers is invalid Verilog; the user must either
+    change one to inout, add a mux/arbiter, or pass the signal through a
+    top-level port.
+    """
+    from excel2design.core.exceptions import MultiDriverError
+    for name, info in sibling_wires.items():
+        n_out = len(info["drivers"])
+        if n_out >= 2:
+            raise MultiDriverError(
+                f"端口 '{name}' 有 {n_out} 个 output driver "
+                f"({', '.join(info['drivers'])}), 无法用 wire 直接连接。"
+                f"建议: 1) 改其中一个为 inout, 2) 加 mux/仲裁, 3) 改用顶层端口透传"
+            )
+
+
+def _format_sibling_wire_lines(sibling_wires: dict[str, dict]) -> list[str]:
+    """Emit ``wire`` declarations with bidirectional-comment support (Phase 15)."""
+    if not sibling_wires:
+        return []
+    max_wn = max(len(n) for n in sibling_wires)
+    max_ww = max(len(w["width"]) for w in sibling_wires.values()) if any(w["width"] for w in sibling_wires.values()) else 0
+    lines = []
+    for name, info in sibling_wires.items():
+        wcol = f"{info['width']:<{max_ww + 1}}" if info["width"] else " " * (max_ww + 1)
+        drivers_str = ", ".join(info["drivers"])
+        sinks_str = ", ".join(info["sinks"])
+        inouts_str = ", ".join(info["inouts"])
+        if info["inouts"]:
+            lines.append(
+                f"wire {wcol}{name:<{max_wn}} ;  // bidirectional: "
+                f"inout={inouts_str}, drivers={drivers_str}, sinks={sinks_str}"
+            )
+        else:
+            note = f"  // {drivers_str} → {sinks_str}" if drivers_str and sinks_str else ""
+            lines.append(f"wire {wcol}{name:<{max_wn}} ;{note}")
+    return lines
+
+
 def generate_wrapper(
     module: Module,
     source_file: Optional[Path | str] = None,
@@ -372,7 +444,6 @@ def generate_wrapper(
 
         # First pass: compute all connections, tracking sibling wires
         all_connections: list[dict] = []  # per-instance port connections
-        sibling_wires: dict[str, dict] = {}  # port_name -> {drivers: [...], sinks: [...]}
 
         for inst in instances:
             sibling_mods = [inst2.module for inst2 in instances if inst2 != inst]
@@ -388,30 +459,17 @@ def generate_wrapper(
                         comment = "// TODO: no matching port"
                 elif not result.width_match:
                     comment = f"// {result.width_note}"
-                elif result.kind == ConnectionKind.SIBLING_PORT:
-                    # Track sibling wire — determine if driver or sink
-                    if p.direction.value == "output":
-                        sibling_wires.setdefault(p.name, {"drivers": [], "sinks": [], "width": p.width.to_verilog()})
-                        sibling_wires[p.name]["drivers"].append(inst.instance_name)
-                    else:
-                        sibling_wires.setdefault(p.name, {"drivers": [], "sinks": [], "width": p.width.to_verilog()})
-                        sibling_wires[p.name]["sinks"].append(inst.instance_name)
                 # v0.6 Phase 12: array ports use standard Verilog array indexing.
                 # Sub-element access (inst.port[3]) is implicit — no extra
                 # syntax needed. Whole-array references are valid too.
                 ports.append({"name": p.name, "connection": conn, "comment": comment})
             all_connections.append({"inst": inst, "ports": ports})
 
-        # Generate internal wire declarations from actual connections
-        if sibling_wires:
-            max_wn = max(len(n) for n in sibling_wires)
-            max_ww = max(len(w["width"]) for w in sibling_wires.values()) if any(w["width"] for w in sibling_wires.values()) else 0
-            for name, info in sibling_wires.items():
-                wcol = f"{info['width']:<{max_ww + 1}}" if info["width"] else " " * (max_ww + 1)
-                drivers_str = ", ".join(info["drivers"])
-                sinks_str = ", ".join(info["sinks"])
-                note = f"  // {drivers_str} → {sinks_str}" if drivers_str and sinks_str else ""
-                wire_lines.append(f"wire {wcol}{name:<{max_wn}} ;{note}")
+        # v0.6 Phase 15: extract sibling wires (drivers / sinks / inouts),
+        # validate multi-driver, then emit wire declarations.
+        sibling_wires = _build_sibling_wires(instances, module)
+        _validate_no_multi_driver(sibling_wires)
+        wire_lines.extend(_format_sibling_wire_lines(sibling_wires))
 
         # Generate instance blocks
         for conn_data in all_connections:
