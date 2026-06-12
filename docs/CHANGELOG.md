@@ -4,6 +4,86 @@
 
 ---
 
+## v0.6.0 (2026-06-12) — 小痛点优先（SPEC §21）
+
+> 触发: v0.5.1 收尾后 Jack 拍板"持续迭代 + 小痛点逐步解决"
+> 4 phase + 1 文档 phase, 总投入 ~1.7d
+> 38 新增测试, 282 → 320 passed (0 回归)
+
+### Phase 12 — `Port.array_dim` 端口数组
+
+**新字段**: `Port.array_dim: Optional[list[tuple[int, int]]] = None`（v0.6 全新落地，v0.5 未留口）
+
+- **Excel 解析**: 新列 `array_dim`（可选，第 11 列，向后兼容老 10 列 fixture）
+  - 格式: `[7:0]` / `[3:0][1:0]` / 空字符串
+  - 解析失败 → `PortValidationError`
+- **Verilog 输出**: `output [3:0] data [7:0]`（packed + unpacked）
+- **SVG 框图**: 端口标签后缀 `data[7:0]`
+- **连接算法**: 优先匹配同 array_dim 形状的 port（避免 2-D 被静默截到 1-D）
+- **字节稳定**: `test_byte_stability.py` 加 fixture 跨 PYTHONHASHSEED 一致
+
+### Phase 13 — `interface=1` 真实处理
+
+- **Verilog 输出**: port 行尾追加 `// interface` 注释
+- **SVG 框图**: 浅蓝色（`#85C1E9`）虚线 group 包围所有 is_interface 端口（stroke-dasharray="4,3"）
+- **测试 fixture**: `tests/fixtures/interface_ports.xlsx` (8 端口 / 3 interface)
+
+### Phase 14 — Parameter/Port 重名容错
+
+- **新异常类型**: `NamingConflictWarning(UserWarning)`（不阻断解析，仅警告）
+- **Verilog 输出**: 冲突 parameter 自动加 `_p` 后缀（`parameter WIDTH_p`），位宽表达式同步替换（`[WIDTH_p-1:0]`）
+- **README Known Limitations 段**: 详细说明 + 3 步示例
+
+### Phase 15 — 同名端口多驱动方向判断
+
+- **新异常类型**: `MultiDriverError(SemanticError)`（硬错误，2 个 output driver 短路会抛）
+- **sibling_wires 拆分**: drivers / sinks / **inouts** 三组（之前只有 drivers/sinks）
+- **bidirectional wire**: inout 端口的连接用 `wire name ;` + `// bidirectional: inout=..., drivers=..., sinks=...` 注释
+- **架构改进**: 抽 `_build_sibling_wires` / `_validate_no_multi_driver` / `_format_sibling_wire_lines` 三个模块级函数
+
+### Phase 16 — 文档收尾
+
+- **README.md**: 路线图追加 v0.5.1 / Phase 12 / Phase 13 / Phase 14 / Phase 15
+- **README.md**: 新增 Known Limitations 段
+- **pyproject.toml**: version 0.5.1 → **0.6.0**
+- **Tag**: `phase-12-done` / `phase-13-done` / `phase-14-done` / `phase-15-done` / `v0.6.0`
+
+### 测试统计
+
+| 项 | 数值 |
+|---|---|
+| Phase 12 新增 | 10 |
+| Phase 13 新增 | 4 |
+| Phase 14 新增 | 4 |
+| Phase 15 新增 | 4 |
+| 接口 fixture 关联 | ~16 |
+| **v0.6.0 总数** | **320 passed** |
+| **v0.5.1 baseline** | 282 passed |
+| **回归** | **0** |
+
+### 字节稳定铁律
+
+- 跨 PYTHONHASHSEED=42 / 99 / default 三种种子输出一致（CLI 调用两次 md5 相同）
+- v0.6 新增 `test_array_dim_byte_stable` 守住 array_dim 字段
+- 多驱动检测引入的 `bidirectional` 注释对原有 wire 输出**字节兼容**（无 inout 时不写注释）
+
+### 升级路径
+
+- v0.5 → v0.6.0: **无 breaking change**，所有 v0.5 工程直接跑 `excel2design` 不变
+- v0.5 fixture 10 列 → v0.6 fixture 10/11 列兼容（缺 array_dim 列按 None 解析）
+- v0.5 hierarchy 接口 → v0.6 接口不变（`SubmoduleInstance.drivers` 未加字段——本 phase 改在 sibling_wires 数据结构里）
+
+### v0.6 暂缓项（→ v0.7 候选）
+
+- 参数化实例覆盖校验
+- 跨文件子模块引用（架构级）
+- SystemVerilog modport 完整支持（等 array_dim 落地后评估）
+- CI / GitHub Actions
+- PyPI 发布
+- 覆盖率报告
+
+---
+
 ## v0.5.1 (2026-06-10) — 优化修复（P0/P1 综合）
 
 > 触发: subagent 优化扫描 → 小马独立验证 → 立即修复
