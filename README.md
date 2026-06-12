@@ -384,6 +384,10 @@ excel2design project <excel> -o <dir>      # ← v0.5 新增
 
 详细见 [docs/SPEC.md](docs/SPEC.md)、[docs/CHANGELOG.md](docs/CHANGELOG.md)、[docs/TASKS.md](docs/TASKS.md)。
 
+## Known Limitations（v0.6 起）
+
+- **Parameter/Port 重名** — 当一个 parameter 跟一个 port 大小写不敏感同名（如 `parameter WIDTH` + port `width`），解析器发 `NamingConflictWarning`，verilog 输出**自动给 parameter 加 `_p` 后缀**（`WIDTH_p`）以避免编译错误，端口名保持原样。引用 parameter 的位宽表达式（如 `[WIDTH-1:0]`）会同步替换为 `[WIDTH_p-1:0]`。
+
 ---
 
 ## 技术栈
