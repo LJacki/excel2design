@@ -55,7 +55,9 @@ def _width_str(p: Port) -> str:
 
 
 def _label_text(p: Port) -> str:
-    return f"{p.name}{_width_str(p)}"
+    # v0.6 Phase 12: append unpacked array dims (e.g. "data[7:0]") to the label.
+    array_suffix = p.to_array_dim_verilog()
+    return f"{p.name}{_width_str(p)}{array_suffix}"
 
 
 def _label_width(text: str) -> int:

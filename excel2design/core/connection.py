@@ -48,6 +48,11 @@ def match_port(
     # Priority 1: parent port (exact match, then fuzzy with instance suffix)
     for parent_port in parent_module.ports:
         if parent_port.name == port.name or _fuzzy_match(parent_port.name, port.name, instance_name):
+            # v0.6 Phase 12: when both ports are arrays, prefer shape-matched ones
+            # to avoid silently truncating a 2-D port to a 1-D connection.
+            if port.array_dim or parent_port.array_dim:
+                if port.array_dim != parent_port.array_dim:
+                    continue  # skip shape-mismatched parent
             wm = _check_width(port, parent_port)
             return ConnectionResult(
                 kind=ConnectionKind.PARENT_PORT,
@@ -61,6 +66,9 @@ def match_port(
     for sibling in sibling_modules:
         for sib_port in sibling.ports:
             if sib_port.name == port.name:
+                if port.array_dim or sib_port.array_dim:
+                    if port.array_dim != sib_port.array_dim:
+                        continue  # skip shape-mismatched sibling
                 wm = _check_width(port, sib_port)
                 return ConnectionResult(
                     kind=ConnectionKind.SIBLING_PORT,

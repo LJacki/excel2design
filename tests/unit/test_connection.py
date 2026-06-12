@@ -131,3 +131,57 @@ def test_fuzzy_match_no_instance_tries_all_suffixes():
 
 def test_fuzzy_match_different_base_returns_false():
     assert _fuzzy_match("totally_different", "data", "u_a") is False
+
+
+# v0.6 Phase 12 — Port.array_dim connection shape-matching tests
+
+def test_array_dim_shape_match_parent() -> None:
+    """Submodule port with array_dim matches parent port of the same shape."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.connection import match_port, ConnectionKind
+    p_sub = Port(name="data", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False),
+                 array_dim=[(7, 0)])
+    p_parent_match = Port(name="data", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                          width=PortWidth(raw="1", msb=0, is_parameter=False),
+                          array_dim=[(7, 0)])
+    m = Module(name="parent", ports=[p_parent_match])
+    r = match_port(p_sub, m, [])
+    assert r.kind == ConnectionKind.PARENT_PORT
+    assert r.target_name == "data"
+
+
+def test_array_dim_shape_mismatch_skipped() -> None:
+    """Submodule array port does NOT match parent scalar port (and vice versa)."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.connection import match_port, ConnectionKind
+    p_sub = Port(name="data", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False),
+                 array_dim=[(7, 0)])
+    p_parent_scalar = Port(name="data", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                           width=PortWidth(raw="1", msb=0, is_parameter=False))
+    m = Module(name="parent", ports=[p_parent_scalar])
+    r = match_port(p_sub, m, [])
+    # shape-mismatched parent should be skipped → unconnected
+    assert r.kind == ConnectionKind.UNCONNECTED
+
+
+def test_array_dim_2d_shape_match() -> None:
+    """2-D submodule port matches 2-D parent of identical shape."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.core.connection import match_port, ConnectionKind
+    p_sub = Port(name="m", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="8", msb=7, is_parameter=False),
+                 array_dim=[(3, 0), (1, 0)])
+    p_parent = Port(name="m", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                    width=PortWidth(raw="8", msb=7, is_parameter=False),
+                    array_dim=[(3, 0), (1, 0)])
+    m = Module(name="p", ports=[p_parent])
+    r = match_port(p_sub, m, [])
+    assert r.kind == ConnectionKind.PARENT_PORT

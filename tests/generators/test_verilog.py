@@ -330,3 +330,46 @@ def test_no_collision_unchanged() -> None:
     )
     # Original DATA_WIDTH should be present.
     assert "DATA_WIDTH" in v
+
+
+# v0.6 Phase 12 — Port.array_dim Verilog output tests
+
+def test_array_dim_1d_in_output() -> None:
+    """A port with array_dim=[(7,0)] produces 'name[7:0]' in verilog output."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    p = Port(name="data_bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False),
+             array_dim=[(7, 0)])
+    m = Module(name="arr_mod", ports=[p])
+    v = generate_wrapper(m)
+    assert "data_bus[7:0]" in v, f"Expected 'data_bus[7:0]' in:\n{v}"
+
+
+def test_array_dim_2d_in_output() -> None:
+    """A port with array_dim=[(3,0),(1,0)] produces 'name[3:0][1:0]'."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    p = Port(name="matrix", direction=Direction.INPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="8", msb=7, is_parameter=False),
+             array_dim=[(3, 0), (1, 0)])
+    m = Module(name="matrix_mod", ports=[p])
+    v = generate_wrapper(m)
+    assert "matrix[3:0][1:0]" in v, f"Expected 'matrix[3:0][1:0]' in:\n{v}"
+
+
+def test_no_array_dim_no_suffix() -> None:
+    """A port with array_dim=None outputs no array suffix."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    p = Port(name="scalar", direction=Direction.INPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False))
+    m = Module(name="scalar_mod", ports=[p])
+    v = generate_wrapper(m)
+    # 'scalar' alone in port declaration (no trailing brackets).
+    # The port may end with newline (last port) or comma (followed by other ports).
+    assert re.search(r"\bscalar\b", v), f"Expected bare 'scalar' in:\n{v}"
+    assert "scalar[" not in v, f"Did not expect 'scalar[' in:\n{v}"

@@ -85,3 +85,20 @@ def test_clock_color_deterministic() -> None:
         f"clock_color is not deterministic across processes: "
         f"seed=1 → {r1.stdout.strip()!r}, seed=7 → {r2.stdout.strip()!r}"
     )
+
+
+# v0.6 Phase 12 — array_dim byte-stability regression
+
+def test_array_dim_byte_stable() -> None:
+    """Generating verilog for a port with array_dim is byte-stable."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.verilog import generate_wrapper
+    p = Port(name="data_bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False),
+             array_dim=[(7, 0)])
+    m = Module(name="arr", ports=[p])
+    a = generate_wrapper(m)
+    b = generate_wrapper(m)
+    assert a == b, "array_dim output not byte-stable"

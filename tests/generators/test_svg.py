@@ -130,3 +130,40 @@ def test_has_arrow_markers(uart_rx: Module) -> None:
     out = generate_svg(uart_rx)
     assert "<marker" in out
     assert "marker-end=\"url(#m_" in out  # per-clock domain marker IDs
+
+
+# v0.6 Phase 12 — Port.array_dim SVG label tests
+
+def test_array_dim_in_svg_label() -> None:
+    """A port with array_dim=[(7,0)] renders the label as 'name[7:0]'."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import _label_text
+    p = Port(name="data_bus", direction=Direction.OUTPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False),
+             array_dim=[(7, 0)])
+    assert _label_text(p) == "data_bus[7:0]"
+
+
+def test_array_dim_2d_in_svg_label() -> None:
+    """A port with array_dim=[(3,0),(1,0)] renders 'name[3:0][1:0]'."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import _label_text
+    p = Port(name="matrix", direction=Direction.INPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="8", msb=7, is_parameter=False),
+             array_dim=[(3, 0), (1, 0)])
+    assert _label_text(p) == "matrix[7:0][3:0][1:0]"
+
+
+def test_no_array_dim_no_suffix_in_svg() -> None:
+    """A port with array_dim=None renders no array suffix."""
+    from excel2design.core.models import (
+        Direction, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import _label_text
+    p = Port(name="scalar", direction=Direction.INPUT, type=SignalType.WIRE,
+             width=PortWidth(raw="1", msb=0, is_parameter=False))
+    assert _label_text(p) == "scalar"

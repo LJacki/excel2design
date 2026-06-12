@@ -260,9 +260,11 @@ def _fmt_ports(ports: list[Port], max_name: int, is_last_group: bool = False) ->
         comment = f"  // {p.comment}" if p.comment else ""
         # Phase 13: interface annotation
         iface_note = "  // interface" if p.is_interface else ""
+        # v0.6 Phase 12: unpacked array dimensions, e.g. [7:0]
+        array_dim_str = p.to_array_dim_verilog()
         is_last_overall = is_last_group and (i == n - 1)
         suffix = "" if is_last_overall else ","
-        lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{suffix}{comment}{iface_note}")
+        lines.append(f"    {direction}{typ}{signed}{width_col} {p.name:<{max_name}}{array_dim_str}{suffix}{comment}{iface_note}")
     return lines
 
 
@@ -394,6 +396,9 @@ def generate_wrapper(
                     else:
                         sibling_wires.setdefault(p.name, {"drivers": [], "sinks": [], "width": p.width.to_verilog()})
                         sibling_wires[p.name]["sinks"].append(inst.instance_name)
+                # v0.6 Phase 12: array ports use standard Verilog array indexing.
+                # Sub-element access (inst.port[3]) is implicit — no extra
+                # syntax needed. Whole-array references are valid too.
                 ports.append({"name": p.name, "connection": conn, "comment": comment})
             all_connections.append({"inst": inst, "ports": ports})
 
