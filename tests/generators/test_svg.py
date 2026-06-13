@@ -200,3 +200,51 @@ def test_no_dashed_group_without_interface() -> None:
     m = Module(name="plain", ports=[p])
     svg = generate_svg(m)
     assert 'stroke-dasharray="4,3"' not in svg, f"Did not expect dashed border in:\n{svg}"
+
+
+# v0.6 Phase 15.4 — inout port thick line + warning colour + group rect
+
+def test_inout_port_uses_warning_color() -> None:
+    """Inout ports render with stroke-width 2.5 and the warning colour."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import generate_svg, COLOR_INOUT_WARN
+    p = Port(name="bidir", direction=Direction.INOUT, type=SignalType.WIRE,
+             width=PortWidth(raw="8", msb=7, is_parameter=False))
+    m = Module(name="inout_mod", ports=[p])
+    svg = generate_svg(m)
+    # The warning colour token must appear in the rendered SVG.
+    assert COLOR_INOUT_WARN in svg, f"Expected {COLOR_INOUT_WARN} in:\n{svg}"
+    # The line element for the inout port should be thicker than the
+    # default 1.5 (we use 2.5).
+    assert 'stroke-width="2.5"' in svg, f"Expected thick inout line in:\n{svg}"
+
+
+def test_two_or_more_inout_gets_group_rect() -> None:
+    """A module with ≥2 inout ports renders a dashed warning group rect."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import generate_svg
+    p1 = Port(name="bidir_a", direction=Direction.INOUT, type=SignalType.WIRE,
+              width=PortWidth(raw="8", msb=7, is_parameter=False))
+    p2 = Port(name="bidir_b", direction=Direction.INOUT, type=SignalType.WIRE,
+              width=PortWidth(raw="8", msb=7, is_parameter=False))
+    m = Module(name="two_inout", ports=[p1, p2])
+    svg = generate_svg(m)
+    # A second dashed pattern is added (3,2) for the group rect.
+    assert 'stroke-dasharray="3,2"' in svg, f"Expected inout group rect in:\n{svg}"
+
+
+def test_single_inout_no_group_rect() -> None:
+    """A module with exactly 1 inout port does NOT get a group rect."""
+    from excel2design.core.models import (
+        Direction, Module, Port, PortWidth, SignalType,
+    )
+    from excel2design.generators.diagram_svg import generate_svg
+    p = Port(name="solo", direction=Direction.INOUT, type=SignalType.WIRE,
+             width=PortWidth(raw="8", msb=7, is_parameter=False))
+    m = Module(name="one_inout", ports=[p])
+    svg = generate_svg(m)
+    assert 'stroke-dasharray="3,2"' not in svg, f"Did not expect group rect in:\n{svg}"

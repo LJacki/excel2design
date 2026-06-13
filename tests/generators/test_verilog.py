@@ -482,3 +482,59 @@ def test_phase15_output_and_inout() -> None:
     assert "bus" in sw
     assert "u_a" in sw["bus"]["drivers"]
     assert "u_b" in sw["bus"]["inouts"]
+
+
+# v0.6 Phase 12.5 — array port whole-array TODO comment (back-fill)
+
+def test_array_port_connection_has_todo() -> None:
+    """When an array port connects by name, a TODO comment is emitted."""
+    from excel2design.core.models import (
+        Direction, Module, Parameter, Port, PortWidth, SignalType, Project,
+    )
+    from excel2design.generators.verilog import generate_wrapper
+
+    p_sub = Port(name="data", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="8", msb=7, is_parameter=False),
+                 array_dim=[(7, 0)])
+    p_parent = Port(name="data", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                    width=PortWidth(raw="8", msb=7, is_parameter=False),
+                    array_dim=[(7, 0)])
+    mod_parent = Module(name="parent", ports=[p_parent], parameters=[
+        Parameter(name="P_DW", value="8"),
+    ])
+    mod_sub = Module(name="sub", ports=[p_sub], parameters=[
+        Parameter(name="P_DW", value="8"),
+    ])
+    from excel2design.core.models import SubmoduleInstance
+    project = Project(
+        modules={"parent": mod_parent, "sub": mod_sub},
+        hierarchy={"parent": ["sub"]},
+    )
+    v = generate_wrapper(mod_parent, project=project, source_sheet="parent")
+    assert "TODO: array port" in v, f"Expected array-port TODO in:\n{v}"
+
+
+def test_no_array_port_no_todo() -> None:
+    """Scalar port connections do NOT get the array-port TODO comment."""
+    from excel2design.core.models import (
+        Direction, Module, Parameter, Port, PortWidth, SignalType, Project,
+    )
+    from excel2design.core.models import SubmoduleInstance
+    from excel2design.generators.verilog import generate_wrapper
+
+    p_sub = Port(name="clk", direction=Direction.INPUT, type=SignalType.WIRE,
+                 width=PortWidth(raw="1", msb=0, is_parameter=False))
+    p_parent = Port(name="clk", direction=Direction.OUTPUT, type=SignalType.WIRE,
+                    width=PortWidth(raw="1", msb=0, is_parameter=False))
+    mod_parent = Module(name="parent", ports=[p_parent], parameters=[
+        Parameter(name="P_DW", value="8"),
+    ])
+    mod_sub = Module(name="sub", ports=[p_sub], parameters=[
+        Parameter(name="P_DW", value="8"),
+    ])
+    project = Project(
+        modules={"parent": mod_parent, "sub": mod_sub},
+        hierarchy={"parent": ["sub"]},
+    )
+    v = generate_wrapper(mod_parent, project=project, source_sheet="parent")
+    assert "TODO: array port" not in v, f"Did not expect array-port TODO in:\n{v}"

@@ -44,6 +44,10 @@ COLOR_INTERFACE = "#85C1E9"
 COLOR_ARROW_IN = "#2E86C1"
 COLOR_ARROW_OUT = "#E74C3C"
 COLOR_ARROW_INOUT = "#9B59B6"
+# v0.6 Phase 15.4: warning-tone for inout/bidirectional connections
+# (multi-driver capable). Distinct from the regular inout colour so the
+# viewer can quickly spot ports that may have multiple drivers.
+COLOR_INOUT_WARN = "#D35400"
 
 
 def _width_str(p: Port) -> str:
@@ -229,17 +233,25 @@ def generate_svg(module: Module) -> str:
         n = len(layout.inouts)
         slot = layout.body_w // max(n, 1)
         base_y = layout.inout_y + INOUT_STRIP // 2
+        # v0.6 Phase 15.4: collect inout x-centres for the optional
+        # group rect (drawn when ≥2 inout ports — a hint that the
+        # designer should double-check for multi-driver conflicts).
+        inout_cx: list[int] = []
         for i, p in enumerate(layout.inouts):
             cx = layout.body_x + slot * i + slot // 2
+            inout_cx.append(cx)
             label = _label_text(p)
+            # v0.6 Phase 15.4: inout ports get a thicker line (2.5 vs 1.5)
+            # and the warning-tone colour, signalling that the port is
+            # bidirectional and may have multiple drivers.
             ET.SubElement(svg, "line", {
                 "x1": str(cx), "y1": str(layout.inout_y),
                 "x2": str(cx), "y2": str(base_y - 6),
-                "stroke": COLOR_ARROW_INOUT, "stroke-width": "1.5",
+                "stroke": COLOR_INOUT_WARN, "stroke-width": "2.5",
             })
             ET.SubElement(svg, "polygon", {
                 "points": f"{cx-4},{base_y-2} {cx},{base_y-6} {cx+4},{base_y-2} {cx},{base_y+2}",
-                "fill": COLOR_ARROW_INOUT,
+                "fill": COLOR_INOUT_WARN,
             })
             t = ET.SubElement(svg, "text", {
                 "x": str(cx), "y": str(base_y + FONT_SIZE + 6),
@@ -247,6 +259,23 @@ def generate_svg(module: Module) -> str:
                 "fill": COLOR_TEXT, "text-anchor": "middle",
             })
             t.text = label
+        # v0.6 Phase 15.4: enclose ≥2 inout ports in a dashed warning
+        # rect so the viewer knows to look for multi-driver hazards.
+        if len(inout_cx) >= 2:
+            min_cx = min(inout_cx)
+            max_cx = max(inout_cx)
+            pad = 6
+            ET.SubElement(svg, "rect", {
+                "x": str(min_cx - slot // 2 + pad // 2),
+                "y": str(layout.inout_y - pad),
+                "width": str(max_cx - min_cx + slot - pad),
+                "height": str(INOUT_STRIP + 2 * pad),
+                "fill": "none",
+                "stroke": COLOR_INOUT_WARN,
+                "stroke-width": "1.2",
+                "stroke-dasharray": "3,2",
+                "rx": "3", "ry": "3",
+            })
 
     if not layout.inputs and not layout.outputs and not layout.inouts:
         t = ET.SubElement(svg, "text", {

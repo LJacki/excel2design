@@ -459,6 +459,13 @@ def generate_wrapper(
                         comment = "// TODO: no matching port"
                 elif not result.width_match:
                     comment = f"// {result.width_note}"
+                # v0.6 Phase 12 (12.5 whole-array TODO): when an array port
+                # connects by name, we cannot tell whether the user wants
+                # the whole-array reference (`inst.port`) or a single
+                # element (`inst.port[i]`). Leave a TODO comment so the
+                # generated Verilog makes the ambiguity explicit.
+                elif p.array_dim:
+                    comment = "// TODO: array port — whole-array ref or [i]?"
                 # v0.6 Phase 12: array ports use standard Verilog array indexing.
                 # Sub-element access (inst.port[3]) is implicit — no extra
                 # syntax needed. Whole-array references are valid too.
